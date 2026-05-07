@@ -54,8 +54,8 @@ def import_excel_data(file_path):
     print('N sheets', len(xls.sheet_names))
 
     # Sheets to import
-    # for sheet in xls.sheet_names[3:10]: 
-    for sheet in xls.sheet_names:
+    for sheet in xls.sheet_names[5:10]: 
+    # for sheet in xls.sheet_names:
 
         # skip first sheet
         if sheet.lower() == "info":
@@ -168,8 +168,6 @@ def plot_data(all_data, mfc_cols):
 
     print(shaded_cols)
     
-
-
     # Identify gaps in time series
     gap_threshold = pd.Timedelta("10 minutes")
     gaps = all_data["datetime"].diff() > gap_threshold
@@ -249,42 +247,6 @@ def plot_data(all_data, mfc_cols):
     plt.savefig("time_series.png")
     plt.show()
 
-# def separate_mfc_data(all_data):
-
-#     """
-#     Concatenates data for individual MFCs into data frame with a single voltage column 
-#     """
-#     # print(all_data.head())
-#     # print(all_data.shape)
-
-#     voltage_cols = all_data.columns[:12]
-
-#     long_frames = []
-
-#     for vcol in voltage_cols:
-
-#         df = all_data.copy()
-
-#         # Rename the single voltage column to a generic name the model expects
-#         df = df.rename(columns={vcol: "Voltage"})
-
-#         # Keep ONLY the single-voltage version + context features
-#         keep_cols = ["datetime", "Voltage", "Resistance", "COD_raw", "COD_filled", "COD_event"]
-#         df = df[keep_cols]
-
-#         # Tag the source voltage channel (optional, for analysis only)
-#         df["Voltage_channel"] = vcol
-
-#         long_frames.append(df)
-
-#     # Combine into one long dataset
-#     all_data_separate = pd.concat(long_frames, ignore_index=True)
-
-#     # print(all_data_separate.head())
-#     # print(all_data_separate.shape)
-
-#     return all_data_separate
-
 def separate_mfc_data(all_data, mfc_cols):
     """
     Splits data into 12 independent sensor time series.
@@ -292,7 +254,7 @@ def separate_mfc_data(all_data, mfc_cols):
         datetime, Voltage, Resistance, COD_raw, COD_filled, COD_event
     """
 
-    voltage_cols = all_data.columns[:12]
+    # voltage_cols = all_data.columns[:12]
 
     sensor_dict = {}
 
@@ -301,19 +263,26 @@ def separate_mfc_data(all_data, mfc_cols):
     N = n_mfcs + 1
 
     # for vcol in voltage_cols:
-    for vcol, n in zip(voltage_cols, list(range(1,N))):
+    # for vcol, n in zip(voltage_cols, list(range(1,N))):
+    for col, n in zip(mfc_cols, list(range(1,N))):
 
         df = all_data.copy()
 
+        # Store the column name 
+        mfc_name = col
+
         # Rename the selected voltage column
-        df = df.rename(columns={vcol: "Voltage"})
+        df = df.rename(columns={col: "Voltage"})
 
         # Keep only the features needed
         # keep_cols = ["datetime", "Voltage", "Resistance", "COD_raw", "COD_filled", "COD_event"]
         keep_cols = ["datetime", "Voltage", "Resistance", "COD" + str(n), "COD_filled_" + str(n), "COD_event_" + str(n)]
         df = df[keep_cols]
 
-        # Store under the voltage channel name
-        sensor_dict[vcol] = df
+        print('column name ', col)
+        print(df.head())
+
+        # Store under the mfc channel name
+        sensor_dict[mfc_name] = df
 
     return sensor_dict

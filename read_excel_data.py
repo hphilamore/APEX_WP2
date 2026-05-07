@@ -39,7 +39,7 @@ def main():
                                                                        'datetime')
                                                                      )]
 
-    # Number of columns containing MFC volta
+    # Number of columns containing MFC voltage
     n_mfcs = len(mfc_cols)
     N = n_mfcs + 1
 
@@ -58,8 +58,8 @@ def main():
     # Plot data
     plot_data(all_data, mfc_cols)
 
-    # # Separate into dictionary of indiviudal MFCs time series data
-    # all_data_separate = separate_mfc_data(all_data, mfc_cols)
+    # Separate into dictionary of indiviudal MFCs time series data
+    all_data_separate = separate_mfc_data(all_data, mfc_cols)
 
 if __name__ == "__main__":
     main()
