@@ -54,8 +54,8 @@ def import_excel_data(file_path):
     print('N sheets', len(xls.sheet_names))
 
     # Sheets to import
-    for sheet in xls.sheet_names[5:10]: 
-    # for sheet in xls.sheet_names:
+    # for sheet in xls.sheet_names[7:10]: 
+    for sheet in xls.sheet_names:
 
         # skip first sheet
         if sheet.lower() == "info":
@@ -279,8 +279,22 @@ def separate_mfc_data(all_data, mfc_cols):
         keep_cols = ["datetime", "Voltage", "Resistance", "COD" + str(n), "COD_filled_" + str(n), "COD_event_" + str(n)]
         df = df[keep_cols]
 
-        print('column name ', col)
-        print(df.head())
+        
+        # Change resistance value applied to MFC 6 from 2025-04-28 as it is different from other MFCs
+        if mfc_name.startswith("6"):
+            print("MFC 6")
+
+            # Check resistance value before change
+            print(df.loc[df['datetime'] >= '2025-04-28'].head())
+
+            df.loc[df['datetime'] >= '2025-04-28', 'Resistance'] = 1
+
+            # Check resistance value after change
+            print(df.loc[df['datetime'] >= '2025-04-28'].head())
+
+        # Check output looks as it should
+        # print('column name ', col)
+        # print(df.head(10))
 
         # Store under the mfc channel name
         sensor_dict[mfc_name] = df
