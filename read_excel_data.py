@@ -64,11 +64,11 @@ def main():
         data = all_data_separate[d]
 
         # Plot seperate data
-        plot_data(data, ["Voltage"], title=d)
+        plot_data(data, ["Voltage"], title=d, voltage_peaks=True)
 
         # Count number of COD events
         n_cod_events = data["COD_event"].sum()
-        print("number of COD events ", n_cod_events)
+        print(f"number of COD events {d} ", n_cod_events)
         
 if __name__ == "__main__":
     main()
