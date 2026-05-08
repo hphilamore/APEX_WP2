@@ -54,8 +54,8 @@ def import_excel_data(file_path):
     print('N sheets', len(xls.sheet_names))
 
     # Sheets to import
-    # for sheet in xls.sheet_names[7:10]: 
-    for sheet in xls.sheet_names:
+    for sheet in xls.sheet_names[7:10]: 
+    # for sheet in xls.sheet_names:
 
         # skip first sheet
         if sheet.lower() == "info":
@@ -111,15 +111,12 @@ def import_excel_data(file_path):
     return data
 
 
-def plot_data(all_data, mfc_cols):
+def plot_data(all_data, mfc_cols, title):
 
-    # all_data = all_data[:5000]
+    n_mfcs = len(mfc_cols)
 
-    # Plot combined data
     plt.figure(figsize=(16, 6))
 
-
-    
     # ----- PRIMARY AXIS: MFC Voltage -----                                                                  
     # Build a colormap for primary-axis columns
     cmap = cm.get_cmap("gist_rainbow")   
@@ -160,20 +157,19 @@ def plot_data(all_data, mfc_cols):
 
     # Columns to plot as shaded regions 
     shaded_cols = ["Resistance"]
-    n_mfcs = len(mfc_cols)
-    N = n_mfcs + 1          # plot all MFCs
-    N = 2                   # plot MFC1 only (assuming a negligably small difference between MFCs when plotted)
-    for n in list(range(1,N)):
-        shaded_cols.append("COD_filled_" + str(n))
 
-    print(shaded_cols)
+    # Include COD values in columns to plot as shaded regions 
+    # (when plotting all MFCs, show COD values for MFC1 only in shaded plot) 
+    for col in all_data.columns:
+        if col.startswith("COD_filled"):
+            shaded_cols.append(col)
+            break
     
     # Identify gaps in time series
     gap_threshold = pd.Timedelta("10 minutes")
     gaps = all_data["datetime"].diff() > gap_threshold
 
-    
-    # for col, c, l in zip(shaded_cols, shade_colours, shade_labels):
+    # Plot shaded regions
     for col in shaded_cols:
 
         # Make a copy of data to plot on vertical axis
@@ -195,12 +191,13 @@ def plot_data(all_data, mfc_cols):
         # Set label 
         l = (
             "Resistance (Ohms)" if col == "Resistance"
-            else "COD (most recent)" if col == "COD_filled_1"
+            # else "COD (most recent)" if col == "COD_filled_1"
+            else "COD (most recent)" if col.startswith("COD_filled")
             else None
         )
 
         # Set opacity
-        a = 0.1 if col == "Resistance" else 0.1
+        a = 0.1 # if col == "Resistance" else 0.1
 
         ax2.fill_between(
             all_data["datetime"],
@@ -211,10 +208,13 @@ def plot_data(all_data, mfc_cols):
             label=l
         )
 
-    # Plot COD events for MFC1 (assuming a negligably small gap in events for MFCs when plotted)
+    # Plot COD events (when plotting all MFCs, show COD values for MFC1 only) 
+    # Find all columns starting with COD 
+    cod_cols = [col for col in all_data.columns if col.startswith("COD")]
+
+    # Plot COD events 
     ax2.scatter(all_data["datetime"],
-                # all_data["COD_raw"],
-                all_data["COD1"],
+                all_data[cod_cols[0]],
                 label = "COD events",
                 marker = "*",
                 edgecolor="black", 
@@ -242,10 +242,10 @@ def plot_data(all_data, mfc_cols):
             handle.set_sizes([50])           # increase legend marker size
 
 
-    plt.title("Time series of MFC voltage, COD and external load")
+    plt.title(title)
     plt.tight_layout()
-    plt.savefig("time_series.png")
-    plt.show()
+    plt.savefig("figs/" + title + ".png")
+    # plt.show()
 
 def separate_mfc_data(all_data, mfc_cols):
     """
@@ -279,7 +279,10 @@ def separate_mfc_data(all_data, mfc_cols):
         keep_cols = ["datetime", "Voltage", "Resistance", "COD" + str(n), "COD_filled_" + str(n), "COD_event_" + str(n)]
         df = df[keep_cols]
 
-        
+        df = df.rename(columns={"COD" + str(n): "COD"})
+        df = df.rename(columns={"COD_filled_" + str(n): "COD_filled"})
+        df = df.rename(columns={"COD_event_" + str(n): "COD_event"})
+
         # Change resistance value applied to MFC 6 from 2025-04-28 as it is different from other MFCs
         if mfc_name.startswith("6"):
             print("MFC 6")

@@ -43,23 +43,32 @@ def main():
     n_mfcs = len(mfc_cols)
     N = n_mfcs + 1
 
-    # # Create column of forward-filled COD values for each MFC
-    # all_data["COD_filled"] = all_data["COD_raw"].ffill()
+    # Create column of forward-filled COD values for each MFC
     for n in list(range(1,N)):
         all_data["COD_filled_" + str(n)] = all_data["COD" + str(n)].ffill()
         
-    # # Create column with event flag (1 at COD measurement points, 0 elsewhere) for each MFC 
-    # all_data["COD_event"] = (~all_data["COD_raw"].isna()).astype(int)
+    # Create column with event flag (1 at COD measurement points, 0 elsewhere) for each MFC 
     for n in list(range(1,N)):
         all_data["COD_event_" + str(n)] = (~all_data["COD" + str(n)].isna()).astype(int)
 
-    print(all_data.head())
+    # print(all_data.head())
 
     # Plot data
-    plot_data(all_data, mfc_cols)
+    plot_data(all_data, mfc_cols, title="all MFCs")
 
     # Separate into dictionary of indiviudal MFCs time series data
     all_data_separate = separate_mfc_data(all_data, mfc_cols)
 
+    for d in all_data_separate:
+
+        data = all_data_separate[d]
+
+        # Plot seperate data
+        plot_data(data, ["Voltage"], title=d)
+
+        # Count number of COD events
+        n_cod_events = data["COD_event"].sum()
+        print("number of COD events ", n_cod_events)
+        
 if __name__ == "__main__":
     main()
