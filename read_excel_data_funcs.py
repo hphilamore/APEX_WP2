@@ -56,10 +56,10 @@ def import_excel_data(file_path):
 
     # Sheets to import
     # for sheet in xls.sheet_names[33:]: 
-    # for sheet in xls.sheet_names[17:27]:
+    for sheet in xls.sheet_names[17:27]:
     # for sheet in xls.sheet_names[27:37]: 
     # for sheet in xls.sheet_names[37:]:  
-    for sheet in xls.sheet_names:
+    # for sheet in xls.sheet_names:
 
         # skip first sheet
         if sheet.lower() == "info":
@@ -273,7 +273,7 @@ def plot_data(all_data, mfc_cols, title=None, voltage_peaks=False):
     plt.title(title)
     plt.tight_layout()
     plt.savefig("figs/" + title + ".png")
-    plt.show()
+    # plt.show()
 
 def separate_mfc_data(all_data, mfc_cols):
     """

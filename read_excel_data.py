@@ -6,7 +6,7 @@ from read_excel_data_funcs import *
 # import torch.nn as nn
 # import torch.nn.functional as F
 
-file_path = "Biosensor data from the start (13-06-24) until 06-01-25_.xlsx"
+file_path = "Biosensor data from the start (13-06-24) until 06-01-25.xlsx"
 
 def main():
 
@@ -21,8 +21,6 @@ def main():
     # Sort by date time
     all_data = all_data.sort_values("datetime").reset_index(drop=True)
 
-    # # Create column of sparse COD values
-    # all_data["COD_raw"] = all_data["COD"]
 
     # Columns containing MFC voltage data 
     mfc_cols = [col for col in all_data.columns if not col.startswith(('COD', 
@@ -30,7 +28,6 @@ def main():
                                                                        'TYE', 
                                                                        'datetime')
                                                                      )]
-
     # Number of columns containing MFC voltage
     n_mfcs = len(mfc_cols)
     N = n_mfcs + 1
@@ -51,6 +48,9 @@ def main():
     # Separate into dictionary of indiviudal MFCs time series data
     all_data_separate = separate_mfc_data(all_data, mfc_cols)
 
+    # Dictionary to store computed information for each MFC
+    mfc_analysis = {}
+
     for d in all_data_separate:
 
         print()
@@ -58,52 +58,69 @@ def main():
 
         data = all_data_separate[d]
 
-        samples_per_day = 2880 
+        mfc_analysis[d] = {}
 
-        # Get indices of COD events
-        cod_events = data.index[data["COD_event"] == 1].to_numpy()
-        print('number of cod events ', len(cod_events))
+        # Get index of COD events
+        cod_events_idx = data.index[data["COD_event"] == 1].to_numpy()
+        # print('number of cod events ', len(cod_events_idx))
 
-        cod_times = data["datetime"].iloc[cod_events]
-        print(cod_times)
+        # Get time of COD events
+        cod_events_time = data["datetime"].iloc[cod_events_idx]
+        print('COD event times \n', cod_events_time)
 
-        selected_indices = []
+        # Store index of voltage peaks
+        voltage_peaks_idx = []
 
         # Get window of voltage data following each COD event
-        for i in range(len(cod_events)):
-            start = cod_events[i] 
+        for i in range(len(cod_events_idx)):
+            start = cod_events_idx[i] 
 
-            if i < len(cod_events) - 1:
-                end = cod_events[i+1]
+            if i < len(cod_events_idx) - 1:
+                end = cod_events_idx[i+1]
                 window = data['Voltage'].iloc[start:end]
 
+            # Last segment of data
             else:
-                # Last segment of data
                 window = data['Voltage'].iloc[start:]
 
             if len(window) > 0:
+
                 # Find maximum voltage recorded in this window (voltage peak)
                 local_max_pos = np.nanargmax(window.values)
 
                 # Convert to global index
                 max_idx = start + local_max_pos
 
-                selected_indices.append(max_idx)
+                # Store index of voltage peak
+                voltage_peaks_idx.append(max_idx)
 
-        print('number of voltage peaks ', len(selected_indices))
+        # print('number of voltage peaks ', len(voltage_peaks_idx))
 
-        peak_times = data["datetime"].iloc[selected_indices]
-        print(peak_times)
+        # Get time of voltage peaks
+        peak_times = data["datetime"].iloc[voltage_peaks_idx]
+        print('Voltage peak times \n',peak_times)
 
-        print(data["Voltage"].iloc[selected_indices])
+        # print('Voltage peak values \n',peak_times)
+        # print(data["Voltage"].iloc[voltage_peaks_idx])
 
-        # # Plot seperate data
-        # plot_data(data, ["Voltage"], title=d, voltage_peaks=True)
-        plot_data(data, ["Voltage"], title=d, voltage_peaks=selected_indices)
+        # Plot seperate data for each MFC
+        plot_data(data, 
+                  ["Voltage"], 
+                  title=d, 
+                  voltage_peaks=voltage_peaks_idx)
 
+        # Compute time from COD event to voltage spike 
+        spike_delay_mins = [(t2 - t1).total_seconds() / 60 for t1, t2 in zip(cod_events_time, peak_times)]
+        print('Delay between COD event and voltage spike (mins) ', spike_delay_mins)
+
+        mfc_analysis[d]["Spike delay (mins)"] = spike_delay_mins
+        
         # # Count number of COD events
-        # n_cod_events = data["COD_event"].sum()
-        # print(f"number of COD events {d} ", n_cod_events)
+        # n_cod_events_idx = data["COD_event"].sum()
+        # print(f"number of COD events {d} ", n_cod_events_idx)
+
+    for i in mfc_analysis:
+        print(mfc_analysis[i])
         
 if __name__ == "__main__":
     main()
