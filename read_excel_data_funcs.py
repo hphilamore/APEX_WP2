@@ -273,7 +273,7 @@ def plot_data(all_data, mfc_cols, title=None, voltage_peaks=False):
     plt.title(title)
     plt.tight_layout()
     plt.savefig("figs/" + title + ".png")
-    # plt.show()
+    plt.show()
 
 def separate_mfc_data(all_data, mfc_cols):
     """

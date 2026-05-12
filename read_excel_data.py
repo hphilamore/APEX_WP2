@@ -120,7 +120,7 @@ def main():
         # print(f"number of COD events {d} ", n_cod_events_idx)
 
     for i in mfc_analysis:
-        print(mfc_analysis[i])
+        print(i, mfc_analysis[i])
         
 if __name__ == "__main__":
     main()
