@@ -1,20 +1,12 @@
 import pandas as pd
-# from datetime import datetime
-# import matplotlib.pyplot as plt
-# import matplotlib.cm as cm
 import numpy as np
 from read_excel_data_funcs import *
-
 
 # import torch
 # import torch.nn as nn
 # import torch.nn.functional as F
 
-N_MFCS = 12
-
-
-file_path = "Biosensor data from the start (13-06-24) until 06-01-25.xlsx"
-
+file_path = "Biosensor data from the start (13-06-24) until 06-01-25_.xlsx"
 
 def main():
 
@@ -61,14 +53,57 @@ def main():
 
     for d in all_data_separate:
 
+        print()
+        print(d)
+
         data = all_data_separate[d]
 
-        # Plot seperate data
-        plot_data(data, ["Voltage"], title=d, voltage_peaks=True)
+        samples_per_day = 2880 
 
-        # Count number of COD events
-        n_cod_events = data["COD_event"].sum()
-        print(f"number of COD events {d} ", n_cod_events)
+        # Get indices of COD events
+        cod_events = data.index[data["COD_event"] == 1].to_numpy()
+        print('number of cod events ', len(cod_events))
+
+        cod_times = data["datetime"].iloc[cod_events]
+        print(cod_times)
+
+        selected_indices = []
+
+        # Get window of voltage data following each COD event
+        for i in range(len(cod_events)):
+            start = cod_events[i] 
+
+            if i < len(cod_events) - 1:
+                end = cod_events[i+1]
+                window = data['Voltage'].iloc[start:end]
+
+            else:
+                # Last segment of data
+                window = data['Voltage'].iloc[start:]
+
+            if len(window) > 0:
+                # Find maximum voltage recorded in this window (voltage peak)
+                local_max_pos = np.nanargmax(window.values)
+
+                # Convert to global index
+                max_idx = start + local_max_pos
+
+                selected_indices.append(max_idx)
+
+        print('number of voltage peaks ', len(selected_indices))
+
+        peak_times = data["datetime"].iloc[selected_indices]
+        print(peak_times)
+
+        print(data["Voltage"].iloc[selected_indices])
+
+        # # Plot seperate data
+        # plot_data(data, ["Voltage"], title=d, voltage_peaks=True)
+        plot_data(data, ["Voltage"], title=d, voltage_peaks=selected_indices)
+
+        # # Count number of COD events
+        # n_cod_events = data["COD_event"].sum()
+        # print(f"number of COD events {d} ", n_cod_events)
         
 if __name__ == "__main__":
     main()

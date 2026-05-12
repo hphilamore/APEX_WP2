@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 import matplotlib.dates as mdates
-from scipy.signal import find_peaks
+# from scipy.signal import find_peaks
 
 
 def reformat_as_year_first(date_value):
@@ -55,11 +55,11 @@ def import_excel_data(file_path):
     print('N sheets', len(xls.sheet_names))
 
     # Sheets to import
-    for sheet in xls.sheet_names[7:13]: 
+    # for sheet in xls.sheet_names[33:]: 
     # for sheet in xls.sheet_names[17:27]:
     # for sheet in xls.sheet_names[27:37]: 
     # for sheet in xls.sheet_names[37:]:  
-    # for sheet in xls.sheet_names:
+    for sheet in xls.sheet_names:
 
         # skip first sheet
         if sheet.lower() == "info":
@@ -79,7 +79,7 @@ def import_excel_data(file_path):
             sheet_name=sheet,
             header=0,
             skiprows=[1, 2],
-            engine="openpyxl"
+            engine="openpyxl",
         )
 
         # Skip sheets that don't yet have COD column
@@ -111,8 +111,6 @@ def import_excel_data(file_path):
         if sheet == "biosensor-anode (30 sec) rec8":
             cutoff = pd.to_datetime("12/08/2024", dayfirst=True)
             df = df[df["datetime"] < cutoff]
-
-
 
         # Drop the original separate date & time columns
         df = df.drop(columns=[date_col, time_col])
@@ -151,93 +149,18 @@ def plot_data(all_data, mfc_cols, title=None, voltage_peaks=False):
             label=col
         )
 
-        if voltage_peaks==True:
-
-            samples_per_day = 2880 
-
-            # Get indices of voltage peaks
-            voltage_peaks, _ = find_peaks(all_data[col], 
-                                          distance=samples_per_day)
-
-            # Get indices of COD events
-            cod_events = all_data.index[all_data["COD_event"] == 1].to_numpy()
-            print('number of cod events ', len(cod_events))
-
-            # cod_times = all_data["datetime"].iloc[cod_events]
-            # print(cod_times)
-
-            selected_peaks = []
-            selected_indices = []
-
-            # Get window following each COD event
-            for i in range(len(cod_events)):
-                start = cod_events[i] 
-
-                if i < len(cod_events) - 1:
-                    end = cod_events[i+1]
-                    window = all_data[col].iloc[start:end]
-
-                else:
-                    # Last segment of data
-                    window = all_data[col].iloc[start:]
-
-                if len(window) > 0:
-                    # Find maximum voltage recorded in this window (voltage peak)
-                    local_max_pos = np.argmax(window.values)
-
-                    # Convert to global index
-                    max_idx = start + local_max_pos
-
-                    selected_indices.append(max_idx)
-
-            print('number of voltage peaks ', len(selected_indices))
-
-            peak_times = all_data["datetime"].iloc[selected_indices]
-            print(peak_times)
-
-
-            #     peaks_in_window = voltage_peaks[mask]
-
-            #     # end = cod_events[i+1]
-
-            #     # Select voltage peaks between this COD event and the next
-            #     peaks_in_window = voltage_peaks[mask]
-
-            #     if len(peaks_in_window) > 0: 
-
-            #         # Get voltage value of each peak
-            #         values = all_data[col].iloc[peaks_in_window].values
-
-            #         # Select peak with greatest voltage
-            #         max_peak = peaks_in_window[np.argmax(values)]
-            #         selected_peaks.append(max_peak)
-
-
-
-
-
+        if isinstance(voltage_peaks, list):
+ 
             # Overlay peaks as points
-            plt.scatter(all_data["datetime"].iloc[selected_indices],
-                        # all_data[col].iloc[voltage_peaks],
-                        all_data[col].iloc[selected_indices],
+            plt.scatter(all_data["datetime"].iloc[voltage_peaks],
+                        all_data[col].iloc[voltage_peaks],
+                        # all_data[col].iloc[selected_indices],
                         color="black",
                         marker="o",
                         label="Detected peaks",
                         zorder=3,
                         edgecolor="black", 
                         facecolor="white")
-
-            # # Overlay peaks as points
-            # plt.scatter(all_data["datetime"].iloc[selected_peaks],
-            #             # all_data[col].iloc[voltage_peaks],
-            #             all_data[col].iloc[selected_peaks],
-            #             color="black",
-            #             marker="o",
-            #             label="Detected peaks",
-            #             zorder=3,
-            #             edgecolor="black", 
-            #             facecolor="white")
-
 
     ax1.set_xlabel("Date–Time")
     ax1.set_ylabel("MFC Voltage (mV)")
