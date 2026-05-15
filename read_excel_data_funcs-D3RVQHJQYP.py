@@ -56,10 +56,10 @@ def import_excel_data(file_path):
 
     # Sheets to import
     # for sheet in xls.sheet_names[33:]: 
-    # for sheet in xls.sheet_names[17:27]:
+    for sheet in xls.sheet_names[17:27]:
     # for sheet in xls.sheet_names[27:37]: 
     # for sheet in xls.sheet_names[37:]:  
-    for sheet in xls.sheet_names:
+    # for sheet in xls.sheet_names:
 
         # skip first sheet
         if sheet.lower() == "info":
@@ -126,22 +126,20 @@ def import_excel_data(file_path):
     return data
 
 
-def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_plot=True):
+def plot_data(all_data, mfc_cols, title=None, voltage_peaks=False):
 
-    cols_to_plot = extract_mfc_column_names(all_data)
-
-    n_mfcs = len(cols_to_plot)
+    n_mfcs = len(mfc_cols)
 
     plt.figure(figsize=(16, 6))
 
     # ----- PRIMARY AXIS: MFC Voltage -----                                                                  
     # Build a colormap for primary-axis columns
     cmap = cm.get_cmap("gist_rainbow")   
-    colors = {col: cmap(i / len(cols_to_plot)) for i, col in enumerate(cols_to_plot)}
+    colors = {col: cmap(i / len(mfc_cols)) for i, col in enumerate(mfc_cols)}
 
     ax1 = plt.gca()
 
-    for col in cols_to_plot:
+    for col in mfc_cols:
         ax1.scatter(
             all_data["datetime"],
             all_data[col],
@@ -275,18 +273,7 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_plot
     plt.title(title)
     plt.tight_layout()
     plt.savefig("figs/" + title + ".png")
-
-    if show_plot:
-        plt.show()
-    plt.close()
-
-def extract_mfc_column_names(all_data):
-        column_names = [col for col in all_data.columns if not col.startswith(('COD', 
-                                                                       'Resistance', 
-                                                                       'TYE', 
-                                                                       'datetime')
-                                                                     )]
-        return column_names
+    plt.show()
 
 def separate_mfc_data(all_data, mfc_cols):
     """
@@ -295,13 +282,16 @@ def separate_mfc_data(all_data, mfc_cols):
         datetime, Voltage, Resistance, COD_raw, COD_filled, COD_event
     """
 
-    # A dict to store individual mfc data as pandas data frames 
+    # voltage_cols = all_data.columns[:12]
+
     sensor_dict = {}
 
     # Number of columns containing MFC volta
     n_mfcs = len(mfc_cols)
     N = n_mfcs + 1
 
+    # for vcol in voltage_cols:
+    # for vcol, n in zip(voltage_cols, list(range(1,N))):
     for col, n in zip(mfc_cols, list(range(1,N))):
 
         df = all_data.copy()
