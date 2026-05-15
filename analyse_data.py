@@ -10,7 +10,7 @@ def main():
     all_data = all_data.set_index("datetime", drop=False).sort_index()
 
     # Select date range to work on 
-    all_data = all_data.loc["2024-10-01":"2024-10-30 23:59:59"]
+    all_data = all_data.loc["2024-08-01":"2024-08-28 23:59:59"]
 
     # Get names of columns containing MFC voltage data
     mfc_column_names = extract_mfc_column_names(all_data)
@@ -27,7 +27,6 @@ def main():
     }
 
     for d in all_data_separate:
-
         print()
         print(d)
         data = all_data_separate[d]
@@ -35,54 +34,44 @@ def main():
         # Compute power output as time series
         data['Power W'] = data["Voltage"] * data["Resistance"]**2
 
-        # Get index of COD events
-        cod_events_idx = data.index[data["COD_event"] == 1].to_numpy()
-        # print('number of cod events ', len(cod_events_idx))
+        # Get date-time index of COD events
+        cod_events_idx = data.index[data["COD_event"] == 1]
 
-        # # Get time of COD events
-        # cod_events_time = data["datetime"].iloc[cod_events_idx]
-        # print('COD event times \n', cod_events_time)
+        # Get index of voltage peaks
+        voltage_peaks_idx = []
 
-        # # Get index of voltage peaks
-        # voltage_peaks_idx = []
+        # Get window of voltage data following each COD event
+        for i in range(len(cod_events_idx)):
+            start = cod_events_idx[i] 
 
-        # # Get window of voltage data following each COD event
-        # for i in range(len(cod_events_idx)):
-        #     start = cod_events_idx[i] 
+            if i < len(cod_events_idx) - 1:
+                end = cod_events_idx[i+1]
+                # window = data['Voltage'].loc[start:end].iloc[:-1]
+                # window = data['Voltage'].iloc[start:end]
+                window = data.loc[(data.index >= start) & (data.index < end), 'Voltage']
 
-        #     if i < len(cod_events_idx) - 1:
-        #         end = cod_events_idx[i+1]
-        #         window = data['Voltage'].iloc[start:end]
+            # Last segment of data has no stopping value
+            else:
+                window = data['Voltage'].loc[start:]
 
-        #     # Last segment of data
-        #     else:
-        #         window = data['Voltage'].iloc[start:]
+            if len(window) > 0:
+                # Find maximum voltage recorded in this window (voltage peak)
+                if window.notna().any():
+                    peak_idx = window.idxmax()
+                    print('Voltage peak:', peak_idx, data['Voltage'].loc[peak_idx])
+                else:
+                    peak_idx = None
+                    print('Voltage peak:', peak_idx)
 
-        #     if len(window) > 0:
+                # Store index of voltage peak
+                voltage_peaks_idx.append(peak_idx)
 
-        #         # Find maximum voltage recorded in this window (voltage peak)
-        #         local_max_pos = np.nanargmax(window.values)
-
-        #         # Convert to global index
-        #         max_idx = start + local_max_pos
-
-        #         # Store index of voltage peak
-        #         voltage_peaks_idx.append(max_idx)
-
-        # # print('number of voltage peaks ', len(voltage_peaks_idx))
-
-        # # Get time of voltage peaks
-        # peak_times = data["datetime"].iloc[voltage_peaks_idx]
-        # print('Voltage peak times \n',peak_times)
-
-        # # print('Voltage peak values \n',peak_times)
-        # # print(data["Voltage"].iloc[voltage_peaks_idx])
-
-        # # Plot voltage data for each MFC, showing peaks
-        # plot_data(data, 
-        #           ["Voltage"], 
-        #           title=d, 
-        #           voltage_peaks=voltage_peaks_idx)
+        # Plot voltage data for each MFC, showing peaks
+        plot_data(data, 
+                  ["Voltage"], 
+                  title=d, 
+                  voltage_peaks=voltage_peaks_idx,
+                  show_days=True)
 
         # # Compute and store delay between COD event and voltage spike 
         # spike_delay_days = [(t2 - t1).total_seconds() / (60 * 60 * 24) for t1, t2 in zip(cod_events_time, peak_times)]

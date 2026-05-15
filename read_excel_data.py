@@ -21,7 +21,6 @@ def main():
     # Sort by date time
     all_data = all_data.sort_values("datetime").reset_index(drop=True)
 
-
     # Get names of columns containing MFC voltage data 
     mfc_column_names = extract_mfc_column_names(all_data)
 

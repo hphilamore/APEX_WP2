@@ -93,7 +93,6 @@ def import_excel_data(file_path):
 
         # Reformat date column
         df[date_col] = df[date_col].apply(reformat_as_year_first)
-
         try:
             df["datetime"] = pd.to_datetime(
                 df[date_col].astype(str) + " " + df[time_col].astype(str)
@@ -101,6 +100,20 @@ def import_excel_data(file_path):
         except:
             print('problem:', sheet, df[date_col].astype(str) + " " + df[time_col].astype(str))
 
+        
+        # Raplace voltage values before the COD spike with NaN in each sheet  
+        voltage_cols = extract_mfc_column_names(df)
+        cod_cols = [col for col in df.columns if col.startswith("COD")]
+
+        # For each MFC
+        for v_col, cod_col in zip(voltage_cols, cod_cols):
+
+                    # Find COD event 
+                    cod_idx = df[cod_col].first_valid_index()
+
+                    # Replace voltage values recorded ahead of the COD event with NaN
+                    if cod_idx is not None:
+                        df.loc[:cod_idx, v_col] = np.nan
 
         # Drop data containing spike with unknown COD value
         if sheet == "30sec x20_3K 2":
@@ -112,6 +125,11 @@ def import_excel_data(file_path):
             cutoff = pd.to_datetime("12/08/2024", dayfirst=True)
             df = df[df["datetime"] < cutoff]
 
+        # Drop data containing spike due to change in resistor value during recording
+        if sheet == "biosensor-anode (30sec) rec15":
+            cutoff = pd.to_datetime("10/02/2025 09:56:54", dayfirst=True)
+            df = df[df["datetime"] < cutoff]
+
         # Drop the original separate date & time columns
         df = df.drop(columns=[date_col, time_col])
 
@@ -121,14 +139,12 @@ def import_excel_data(file_path):
     # Example showing what's loaded:
     for s in data:
         print(f"\nSheet: {s}")
-        print(data[s].head())
+        print(data[s].head(30))
 
     return data
 
 
-def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_plot=True):
-
-    cols_to_plot = extract_mfc_column_names(all_data)
+def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_days=False, show_plot=True):
 
     n_mfcs = len(cols_to_plot)
 
@@ -152,11 +168,13 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_plot
         )
 
         if isinstance(voltage_peaks, list):
+
+            # Remove None values before plotting 
+            voltage_peaks = [v for v in voltage_peaks if v!=None]
  
             # Overlay peaks as points
-            plt.scatter(all_data["datetime"].iloc[voltage_peaks],
-                        all_data[col].iloc[voltage_peaks],
-                        # all_data[col].iloc[selected_indices],
+            plt.scatter(all_data["datetime"].loc[voltage_peaks],
+                        all_data[col].loc[voltage_peaks],
                         color="black",
                         marker="o",
                         label="Detected peaks",
@@ -171,10 +189,11 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_plot
     ax1.xaxis.set_major_locator(mdates.MonthLocator())
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
 
-    # # Minor ticks: every day
-    # ax1.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
-    # ax1.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))  # day number
-    # ax1.tick_params(axis='x', which='minor', labelsize=6, labelrotation=90)
+    if show_days:
+        # Minor ticks: every day
+        ax1.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
+        ax1.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))  # day number
+        ax1.tick_params(axis='x', which='minor', labelsize=6, labelrotation=90)
 
     # Adjust spacing for readability
     ax1.tick_params(axis='x', which='major', pad=10, rotation=45)
@@ -284,7 +303,9 @@ def extract_mfc_column_names(all_data):
         column_names = [col for col in all_data.columns if not col.startswith(('COD', 
                                                                        'Resistance', 
                                                                        'TYE', 
-                                                                       'datetime')
+                                                                       'datetime',
+                                                                       'Date',
+                                                                       'Time')
                                                                      )]
         return column_names
 
