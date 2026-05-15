@@ -10,7 +10,7 @@ def main():
     all_data = all_data.set_index("datetime", drop=False).sort_index()
 
     # Select date range to work on 
-    all_data = all_data.loc["2024-08-01":"2024-08-28 23:59:59"]
+    # all_data = all_data.loc["2024-08-01":"2024-08-28 23:59:59"]
 
     # Get names of columns containing MFC voltage data
     mfc_column_names = extract_mfc_column_names(all_data)
@@ -46,8 +46,7 @@ def main():
 
             if i < len(cod_events_idx) - 1:
                 end = cod_events_idx[i+1]
-                # window = data['Voltage'].loc[start:end].iloc[:-1]
-                # window = data['Voltage'].iloc[start:end]
+                # Get voltage data exclusive of stopping value
                 window = data.loc[(data.index >= start) & (data.index < end), 'Voltage']
 
             # Last segment of data has no stopping value
@@ -58,10 +57,12 @@ def main():
                 # Find maximum voltage recorded in this window (voltage peak)
                 if window.notna().any():
                     peak_idx = window.idxmax()
-                    print('Voltage peak:', peak_idx, data['Voltage'].loc[peak_idx])
+                    peak_val = data['Voltage'].loc[peak_idx]
                 else:
                     peak_idx = None
-                    print('Voltage peak:', peak_idx)
+                    peak_val = None
+                    
+                # print('Voltage peak:', peak_idx, peak_val)
 
                 # Store index of voltage peak
                 voltage_peaks_idx.append(peak_idx)
@@ -71,49 +72,60 @@ def main():
                   ["Voltage"], 
                   title=d, 
                   voltage_peaks=voltage_peaks_idx,
-                  show_days=True)
+                  show_days=True,
+                  show_plot=False
+                  )
 
-        # # Compute and store delay between COD event and voltage spike 
-        # spike_delay_days = [(t2 - t1).total_seconds() / (60 * 60 * 24) for t1, t2 in zip(cod_events_time, peak_times)]
-        # spike_delay_days = [round(i, 5) for i in spike_delay_days]
-        # mfc_analysis["Spike delay (days)"][d] = spike_delay_days
-        # df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in mfc_analysis["Spike delay (days)"].items()]))
-        # df.to_excel("Spike_delay_days.xlsx", index=False)
+        # Compute and store delay between COD event and voltage spike
+        spike_delay_days = []
+        for c, v in zip(cod_events_idx, voltage_peaks_idx):
+            if v:
+                delay = (v - c).total_seconds() / (60 * 60 * 24)
+            else:
+                delay = np.nan
+            spike_delay_days.append(delay)
+        # Round to 6 d.p.
+        spike_delay_days = [round(i, 6) for i in spike_delay_days]
+        mfc_analysis["Spike delay (days)"][d] = spike_delay_days
 
-
-
-    #     # Plot seperate data for each MFC
-    #     plot_data(data, 
-    #               ["Power"], 
-    #               title=d)
-        
-
-    # # for key, value in mfc_analysis["Spike delay (days)"].items():
-    # #     print(key, '\t', value)
-    # #     if key=='8) 10*10 -2':
-    # #         continue
-    # #     if '10*10' in key:
-    # #         c = 'red'
-    # #         if 'AC' in key:
-    # #             c = 'orange'
-    # #     else:
-    # #         c = 'blue'
-    # #         if 'AC' in key:
-    # #             c = 'green'
-    # #     plt.plot(value, label=key, color=c, marker='o', linestyle='none')
-    # # plt.xlabel('spike number')
-    # # plt.ylabel('spike delay(days)')
-    # # plt.ylim(0, 10)
-    # # plt.legend()
-    # # plt.show()
+    # Save spike delay analysis to excel file 
+    df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in mfc_analysis["Spike delay (days)"].items()]))  
+    df.to_excel("Spike_delay_days.xlsx", index=False)
+    print(df)
 
     
+    # Group spike delay data by MFC type and compute min, max, mean
+    mfc_groups = {  '10*10 AC':{}, 
+                    '20*30 AC':{}, 
+                    '10*10':{}, 
+                    '20*30':{}
+                    }
+    
+    for i, mfc_type in zip(range(0, df.shape[1], 3), mfc_groups):
 
-    # # Convert to DataFrame (each list becomes a column)
-    # df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in mfc_analysis["Spike delay (days)"].items()]))
+        # Take columns in groups of 3
+        group = df.iloc[:, i:i+3]
 
-    # # Save to Excel
-    # df.to_excel("Spike_delay_days.xlsx", index=False)
+        mfc_groups[mfc_type]['min'] = group.min(axis=1)
+        mfc_groups[mfc_type]['max'] = group.max(axis=1)
+        mfc_groups[mfc_type]['mean'] = group.mean(axis=1)
+
+
+        x = range(len(mfc_groups[mfc_type]['mean']))   # or use datetime index if you have one
+
+        plt.plot(x, mfc_groups[mfc_type]['mean'], label=mfc_type)
+
+        # shaded area between min and max
+        plt.fill_between(x, mfc_groups[mfc_type]['min'], mfc_groups[mfc_type]['max'], alpha=0.3)
+
+    print(mfc_groups)
+    plt.legend()
+    plt.xticks(x)  # only integers
+    plt.xlabel('COD event index')
+    plt.ylabel('Delay from COD event to voltage peak (days)')
+    plt.savefig("Spike_delay_days.png")
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
