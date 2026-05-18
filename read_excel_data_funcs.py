@@ -86,6 +86,9 @@ def import_excel_data(file_path):
         if "COD1" not in df.columns:
             continue
 
+        # Rename the resistance column
+        df = df.rename(columns={"Resistance": "Resistance kOhms"})
+
         # --- Combine date + time columns ---
         # Give time and date columns a name 
         date_col = df.columns[0]
@@ -205,7 +208,7 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_days
     ax2 = ax1.twinx()
 
     # Columns to plot as shaded regions 
-    shaded_cols = ["Resistance"]
+    shaded_cols = ["Resistance kOhms"]
 
     # Include COD values in columns to plot as shaded regions 
     # (when plotting all MFCs, show COD values for MFC1 only in shaded plot) 
@@ -225,7 +228,7 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_days
         y = all_data[col].astype(float).copy()
 
         # Convert resistance to Ohms for plotting
-        if col == "Resistance":
+        if col == "Resistance kOhms":
             y *= 1000
 
         # Insert NaN where there are gaps in data so shading doesn't cross
@@ -235,11 +238,11 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_days
         y_masked = np.ma.masked_invalid(y)
 
         # Set colour 
-        c = "red" if col == ("Resistance") else "blue"
+        c = "red" if col == ("Resistance kOhms") else "blue"
 
         # Set label 
         l = (
-            "Resistance (Ohms)" if col == "Resistance"
+            "Resistance (Ohms)" if col == "Resistance kOhms"
             # else "COD (most recent)" if col == "COD_filled_1"
             else "COD (most recent)" if col.startswith("COD_filled")
             else None
@@ -301,7 +304,7 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_days
 
 def extract_mfc_column_names(all_data):
         column_names = [col for col in all_data.columns if not col.startswith(('COD', 
-                                                                       'Resistance', 
+                                                                       'Resistance kOhms', 
                                                                        'TYE', 
                                                                        'datetime',
                                                                        'Date',
@@ -331,11 +334,11 @@ def separate_mfc_data(all_data, mfc_cols):
         mfc_name = col
 
         # Rename the selected voltage column
-        df = df.rename(columns={col: "Voltage"})
+        df = df.rename(columns={col: "Voltage mV"})
 
         # Keep only the features needed
         # keep_cols = ["datetime", "Voltage", "Resistance", "COD_raw", "COD_filled", "COD_event"]
-        keep_cols = ["datetime", "Voltage", "Resistance", "COD" + str(n), "COD_filled_" + str(n), "COD_event_" + str(n)]
+        keep_cols = ["datetime", "Voltage mV", "Resistance kOhms", "COD" + str(n), "COD_filled_" + str(n), "COD_event_" + str(n)]
         df = df[keep_cols]
 
         df = df.rename(columns={"COD" + str(n): "COD"})
@@ -349,7 +352,7 @@ def separate_mfc_data(all_data, mfc_cols):
             # Check resistance value before change
             # print(df.loc[df['datetime'] >= '2025-04-28'].head())
 
-            df.loc[df['datetime'] >= '2025-04-28', 'Resistance'] = 1
+            df.loc[df['datetime'] >= '2025-04-28', "Resistance kOhms"] = 1
 
             # Check resistance value after change
             # print(df.loc[df['datetime'] >= '2025-04-28'].head())
