@@ -17,13 +17,11 @@ def main():
 
     # Plot all voltage data
     plot_data(all_data, cols_to_plot=mfc_column_names, title="all MFCs", 
-            #   show_plot=False
+              show_plot=False
               )
 
     # Separate into dictionary of indiviudal MFCs time series data
     all_data_separate = separate_mfc_data(all_data, mfc_column_names)
-
-    
 
     # ---------------------------------------------------------------
     # Compute/extract parameters for each COD event, for each MFC
@@ -246,81 +244,113 @@ def main():
         plt.xticks(COD_event_numbers)  # only integers
         plt.xlabel('COD event index')
         plt.ylabel(parameter)
-        plt.savefig("figs/" + parameter + "Spike_delay_days.png")
+        plt.savefig(f"figs/{parameter}.png")
         plt.show()
 
         print(summary)
 
     
     # ---------------------------------------------------------------
-    # -------- Vpeak vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
+    # -------- Vpeak // Ppeak // Ener vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
     # ---------------------------------------------------------------
 
-    
-    df_vpeak = mfc_analysis["Vpeak mV"]
-    df_cod = mfc_analysis["COD"]
-    df_res = mfc_analysis["Resistance kOhms"]
+    for parameter in ["Vpeak mV", "Ppeak W", "Energy J"]:
 
-    for mfc_type, pattern in patterns.items():
+        df_param = mfc_analysis[parameter]
+        df_cod = mfc_analysis["COD"]
+        df_res = mfc_analysis["Resistance kOhms"]
 
-        # Select matching columns
-        cod = df_cod.filter(regex=pattern)
-        vpeak = df_vpeak.filter(regex=pattern)
-        res = df_res.filter(regex=pattern)
+        for mfc_type, pattern in patterns.items():
 
-        # Ensure same column order
-        cod = cod[vpeak.columns]
-        res = res[vpeak.columns]
+            # Select matching columns
+            param = df_param.filter(regex=pattern)
+            cod = df_cod.filter(regex=pattern)
+            res = df_res.filter(regex=pattern)
 
-        # Flatten to 1D arrays
-        x = cod.values.flatten()
-        y = vpeak.values.flatten()
-        r = res.values.flatten()
+            # Ensure same column order
+            cod = cod[param.columns]
+            res = res[param.columns]
 
-        # Remove NaNs (important for plotting)
-        mask = ~np.isnan(x) & ~np.isnan(y) & ~np.isnan(r)
-        x, y, r = x[mask], y[mask], r[mask]
+            # Flatten to 1D arrays
+            x = cod.values.flatten()
+            y = param.values.flatten()
+            r = res.values.flatten()
 
-        # Create plot
-        plt.figure(figsize=(16, 6))
+            # Remove NaNs (important for plotting)
+            mask = ~np.isnan(x) & ~np.isnan(y) & ~np.isnan(r)
+            x, y, r = x[mask], y[mask], r[mask]
 
-        # Get unique resistance values 
-        unique_vals = sorted(np.unique(r))
+            # Create plot
+            plt.figure(figsize=(10, 6))
 
-        # colors = plt.cm.tab10(range(len(unique_vals)))
-        # colours = ["red", "cyan", "green"]
+            # Get unique resistance values 
+            unique_r_vals = sorted(np.unique(r))
 
-        # Gnerate colour map
-        colours = ["red", "cyan", "green"]
-        colour_map = dict(zip(unique_vals, colours))
+            # colors = plt.cm.tab10(range(len(unique_vals)))
+            # colours = ["red", "cyan", "green"]
 
-        # Plot each resistance group separately
-        for val, col in zip(unique_vals, colours):
-            # Get index of equal resistance values
-            idx = r == val
-            
-            # Plot points from this resistance group
-            plt.scatter(x[idx], 
-                        y[idx], 
-                        # color=col, 
-                        color=colour_map.get(val, "black"), # Use colour map or default to black
-                        label=f"R = {val} kOhm")
+            # Gnerate colour map
+            colours = ["red", "cyan", "green"]
+            colour_map = dict(zip(unique_r_vals, colours))
 
-        plt.xlabel("COD")
-        plt.ylabel("Vpeak mV")
-        plt.title(mfc_type)
-        plt.legend()
-        plt.show()
+            # Plot each resistance group separately
+            for val in unique_r_vals: 
+                # Get index of equal resistance values
+                idx = r == val
 
-    # ---------------------------------------------------------------
-    # -------- Ppeak vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
-    # ---------------------------------------------------------------
+                x_ = x[idx]
+                y_ = y[idx]
+                
+                # Plot points from this resistance group
+                plt.scatter(x_, 
+                            y_, 
+                            # color=col, 
+                            color=colour_map.get(val, "black"), # Use colour map or default to black
+                            label=f"R = {val} kOhm")
+                
 
-    # ---------------------------------------------------------------
-    # -------- Energy vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
-    # ---------------------------------------------------------------
+                # Linear fit
+
+                # Fit line: y = m*x + c
+                m, c = np.polyfit(x_, y_, 1)
+
+                # Generate fitted line
+                x_fit = np.linspace(min(x_), max(x_), 100)
+                y_fit = m * x_fit + c
+
+                # Compute R²
+
+                # Predicited y values using linear equation
+                y_pred = m * x_ + c
+
+                # Residual sum of squared error between actual and predicted y values
+                ss_res = np.sum((y_ - y_pred) ** 2)
+
+                # total sum of squared error between actual and mean y values
+                ss_tot = np.sum((y_ - np.mean(y_)) ** 2)
+
+                # Compute R² with mechnism for 0 division handling
+                r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else np.nan
+
+                # Plot fitted line
+                plt.plot(
+                    x_fit,
+                    y_fit,
+                    color=colour_map.get(val, "black"),
+                    linestyle='--'
+                )
+
+                # Add R² label to legend
+                plt.plot([], [], ' ', label=f"R² (R={val} kOhm) = {r2:.2f}")
 
 
+            plt.xlabel("COD")
+            plt.ylabel(parameter)
+            plt.title(parameter + " vs COD - " + mfc_type)
+            plt.subplots_adjust(right=0.75)
+            plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+            plt.savefig(f"figs/{parameter} vs COD - {mfc_type}.png")
+            plt.show()
 
 if __name__ == "__main__":
     main()
