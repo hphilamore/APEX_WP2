@@ -10,13 +10,15 @@ def main():
     all_data = all_data.set_index("datetime", drop=False).sort_index()
 
     # Select date range to work on 
-    all_data = all_data.loc["2024-08-01":"2024-08-28 23:59:59"]
+    # all_data = all_data.loc["2024-08-01":"2024-08-28 23:59:59"]
 
     # Get names of columns containing MFC voltage data
     mfc_column_names = extract_mfc_column_names(all_data)
 
     # Plot all voltage data
-    plot_data(all_data, cols_to_plot=mfc_column_names, title="all MFCs", show_plot=False)
+    plot_data(all_data, cols_to_plot=mfc_column_names, title="all MFCs", 
+            #   show_plot=False
+              )
 
     # Separate into dictionary of indiviudal MFCs time series data
     all_data_separate = separate_mfc_data(all_data, mfc_column_names)
@@ -183,10 +185,8 @@ def main():
 
     # Save COD event parameters to excel file  
     with pd.ExcelWriter("mfc_analysis.xlsx") as writer:
+
         for sheet in mfc_analysis:
-            # # Translate dictionary to data frame
-            # df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in mfc_analysis[sheet].items()]))  
-            # df.to_excel(writer, sheet_name=sheet, index=False)
 
             # Convert all nested dictionaries to DataFrames in place
             mfc_analysis[sheet] = pd.DataFrame(
@@ -194,7 +194,8 @@ def main():
                 )
             
             # Write to excel file
-            mfc_analysis[sheet].to_excel(writer, sheet_name=sheet, index=False)
+            # mfc_analysis[sheet].to_excel(writer, sheet_name=sheet, index=False)
+            mfc_analysis[sheet].to_excel(writer, sheet_name=sheet)
 
 
     # Regex patterns for each MFC type to filter data
@@ -206,93 +207,117 @@ def main():
     }
 
     # ---------------------------------------------------------------
-    # -------- Min, max, mean spike delay for each COD event ---------
+    # -------- Min, max, mean spike delay and total energy for each COD event ---------
     # ---------------------------------------------------------------
-    summary = {}
+    for parameter in ["Spike delay (days)", "Energy J"]:
+    
+        summary = {}
 
-    for mfc_type, pattern in patterns.items():
+        plt.figure(figsize=(16, 6))
 
-        # Select only columns that match the heading name pettern
-        cols = mfc_analysis["Spike delay (days)"].filter(regex=pattern)   
+        for mfc_type, pattern in patterns.items():
 
-        # Compute the COD event-wise (i.e. row-wise) min, max, mean
-        summary[mfc_type] = {
-            "min": cols.min(axis=1),
-            "max": cols.max(axis=1),
-            "mean": cols.mean(axis=1)
-        }
+            # Select only columns that match the heading name pettern
+            cols = mfc_analysis[parameter].filter(regex=pattern)   
 
-        number_of_COD_events = len(summary[mfc_type]["mean"])
+            # Compute the COD event-wise (i.e. row-wise) min, max, mean
+            summary[mfc_type] = {
+                "min": cols.min(axis=1),
+                "max": cols.max(axis=1),
+                "mean": cols.mean(axis=1)
+            }
 
-        COD_event_numbers = range(number_of_COD_events)
+            number_of_COD_events = len(summary[mfc_type]["mean"])
 
-        # Plot COD event-wise mean
-        plt.plot(COD_event_numbers, 
-                 summary[mfc_type]["mean"], 
-                 label=mfc_type)
+            COD_event_numbers = range(number_of_COD_events)
 
-        # Shade area between min and max
-        plt.fill_between(COD_event_numbers, 
-                         summary[mfc_type]['min'], 
-                         summary[mfc_type]['max'], 
-                         alpha=0.3)
+            # Plot COD event-wise mean
+            plt.plot(COD_event_numbers, 
+                    summary[mfc_type]["mean"], 
+                    label=mfc_type)
 
-    plt.legend()
-    plt.xticks(COD_event_numbers)  # only integers
-    plt.xlabel('COD event index')
-    plt.ylabel('Delay from COD event to voltage peak (days)')
-    plt.savefig("figs/Spike_delay_days.png")
-    plt.show()
+            # Shade area between min and max
+            plt.fill_between(COD_event_numbers, 
+                            summary[mfc_type]['min'], 
+                            summary[mfc_type]['max'], 
+                            alpha=0.3)
 
-    print(summary)
+        plt.legend()
+        plt.xticks(COD_event_numbers)  # only integers
+        plt.xlabel('COD event index')
+        plt.ylabel(parameter)
+        plt.savefig("figs/" + parameter + "Spike_delay_days.png")
+        plt.show()
 
-    # ---------------------------------------------------------------
-    # -------- Min, max, mean total energy for each COD event ---------
-    # ---------------------------------------------------------------
-    summary = {}
+        print(summary)
 
-    for mfc_type, pattern in patterns.items():
-
-        # Select only columns that match the heading name pettern
-        cols = mfc_analysis["Energy J"].filter(regex=pattern)   
-
-        # Compute the COD event-wise (i.e. row-wise) min, max, mean
-        summary[mfc_type] = {
-            "min": cols.min(axis=1),
-            "max": cols.max(axis=1),
-            "mean": cols.mean(axis=1)
-        }
-
-        number_of_COD_events = len(summary[mfc_type]["mean"])
-
-        COD_event_numbers = range(number_of_COD_events)
-
-        # Plot COD event-wise mean
-        plt.plot(COD_event_numbers, 
-                 summary[mfc_type]["mean"], 
-                 label=mfc_type)
-
-        # Shade area between min and max
-        plt.fill_between(COD_event_numbers, 
-                         summary[mfc_type]['min'], 
-                         summary[mfc_type]['max'], 
-                         alpha=0.3)
-
-    plt.legend()
-    plt.xticks(COD_event_numbers)  # only integers
-    plt.xlabel('COD event index')
-    plt.ylabel('Delay from COD event to voltage peak (days)')
-    plt.savefig("figs/Spike_delay_days.png")
-    plt.show()
-
-    print(summary)
-
+    
     # ---------------------------------------------------------------
     # -------- Vpeak vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
     # ---------------------------------------------------------------
 
+    
+    df_vpeak = mfc_analysis["Vpeak mV"]
+    df_cod = mfc_analysis["COD"]
+    df_res = mfc_analysis["Resistance kOhms"]
+
+    for mfc_type, pattern in patterns.items():
+
+        # Select matching columns
+        cod = df_cod.filter(regex=pattern)
+        vpeak = df_vpeak.filter(regex=pattern)
+        res = df_res.filter(regex=pattern)
+
+        # Ensure same column order
+        cod = cod[vpeak.columns]
+        res = res[vpeak.columns]
+
+        # Flatten to 1D arrays
+        x = cod.values.flatten()
+        y = vpeak.values.flatten()
+        r = res.values.flatten()
+
+        # Remove NaNs (important for plotting)
+        mask = ~np.isnan(x) & ~np.isnan(y) & ~np.isnan(r)
+        x, y, r = x[mask], y[mask], r[mask]
+
+        # Create plot
+        plt.figure(figsize=(16, 6))
+
+        # Get unique resistance values 
+        unique_vals = sorted(np.unique(r))
+
+        # colors = plt.cm.tab10(range(len(unique_vals)))
+        # colours = ["red", "cyan", "green"]
+
+        # Gnerate colour map
+        colours = ["red", "cyan", "green"]
+        colour_map = dict(zip(unique_vals, colours))
+
+        # Plot each resistance group separately
+        for val, col in zip(unique_vals, colours):
+            # Get index of equal resistance values
+            idx = r == val
+            
+            # Plot points from this resistance group
+            plt.scatter(x[idx], 
+                        y[idx], 
+                        # color=col, 
+                        color=colour_map.get(val, "black"), # Use colour map or default to black
+                        label=f"R = {val} kOhm")
+
+        plt.xlabel("COD")
+        plt.ylabel("Vpeak mV")
+        plt.title(mfc_type)
+        plt.legend()
+        plt.show()
+
     # ---------------------------------------------------------------
     # -------- Ppeak vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
+    # ---------------------------------------------------------------
+
+    # ---------------------------------------------------------------
+    # -------- Energy vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
     # ---------------------------------------------------------------
 
 
