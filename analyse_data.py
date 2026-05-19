@@ -71,7 +71,7 @@ def main():
         power_peaks = []
         energy = []
 
-        print(data["Voltage mV"][:10])
+        # print(data["Voltage mV"][:10])
 
         # Compute mfc power output time series
         data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
@@ -184,44 +184,117 @@ def main():
     # Save COD event parameters to excel file  
     with pd.ExcelWriter("mfc_analysis.xlsx") as writer:
         for sheet in mfc_analysis:
-            # Translate dictionary to data frame
-            df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in mfc_analysis[sheet].items()]))  
-            df.to_excel(writer, sheet_name=sheet, index=False)
-            # print(df)
+            # # Translate dictionary to data frame
+            # df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in mfc_analysis[sheet].items()]))  
+            # df.to_excel(writer, sheet_name=sheet, index=False)
 
-    # # MFC types
-    # mfc_groups = { '10*10 AC':{}, 
-    #             '20*30 AC':{}, 
-    #             '10*10':{}, 
-    #             '20*30':{}
-    #             }
+            # Convert all nested dictionaries to DataFrames in place
+            mfc_analysis[sheet] = pd.DataFrame(
+                {k: pd.Series(v) for k, v in mfc_analysis[sheet].items()}
+                )
+            
+            # Write to excel file
+            mfc_analysis[sheet].to_excel(writer, sheet_name=sheet, index=False)
 
-    
-    # # Group spike delay data by MFC type and compute min, max, mean for each COD event 
-    # for i, mfc_type in zip(range(0, df.shape[1], 3), mfc_groups):
 
-    #     # Take columns in groups of 3
-    #     group = df.iloc[:, i:i+3]
+    # Regex patterns for each MFC type to filter data
+    patterns = {
+        "10x10_AC": r"10\*10\s*AC",
+        "20x30_AC": r"20\*30\s*AC",
+        "10x10": r"10\*10(?!\s*AC)",   # match 10*10 NOT followed by AC
+        "20x30": r"20\*30(?!\s*AC)"    # match 20*30 NOT followed by AC
+    }
 
-    #     mfc_groups[mfc_type]['min'] = group.min(axis=1)
-    #     mfc_groups[mfc_type]['max'] = group.max(axis=1)
-    #     mfc_groups[mfc_type]['mean'] = group.mean(axis=1)
+    # ---------------------------------------------------------------
+    # -------- Min, max, mean spike delay for each COD event ---------
+    # ---------------------------------------------------------------
+    summary = {}
 
-    #     event_number = range(len(mfc_groups[mfc_type]['mean']))   
+    for mfc_type, pattern in patterns.items():
 
-    #     # Plot spike delay data
-    #     plt.plot(event_number, mfc_groups[mfc_type]['mean'], label=mfc_type)
+        # Select only columns that match the heading name pettern
+        cols = mfc_analysis["Spike delay (days)"].filter(regex=pattern)   
 
-    #     # shaded area between min and max
-    #     plt.fill_between(x, mfc_groups[mfc_type]['min'], mfc_groups[mfc_type]['max'], alpha=0.3)
+        # Compute the COD event-wise (i.e. row-wise) min, max, mean
+        summary[mfc_type] = {
+            "min": cols.min(axis=1),
+            "max": cols.max(axis=1),
+            "mean": cols.mean(axis=1)
+        }
 
-    # print(mfc_groups)
-    # plt.legend()
-    # plt.xticks(x)  # only integers
-    # plt.xlabel('COD event index')
-    # plt.ylabel('Delay from COD event to voltage peak (days)')
-    # plt.savefig("Spike_delay_days.png")
-    # plt.show()
+        number_of_COD_events = len(summary[mfc_type]["mean"])
+
+        COD_event_numbers = range(number_of_COD_events)
+
+        # Plot COD event-wise mean
+        plt.plot(COD_event_numbers, 
+                 summary[mfc_type]["mean"], 
+                 label=mfc_type)
+
+        # Shade area between min and max
+        plt.fill_between(COD_event_numbers, 
+                         summary[mfc_type]['min'], 
+                         summary[mfc_type]['max'], 
+                         alpha=0.3)
+
+    plt.legend()
+    plt.xticks(COD_event_numbers)  # only integers
+    plt.xlabel('COD event index')
+    plt.ylabel('Delay from COD event to voltage peak (days)')
+    plt.savefig("figs/Spike_delay_days.png")
+    plt.show()
+
+    print(summary)
+
+    # ---------------------------------------------------------------
+    # -------- Min, max, mean total energy for each COD event ---------
+    # ---------------------------------------------------------------
+    summary = {}
+
+    for mfc_type, pattern in patterns.items():
+
+        # Select only columns that match the heading name pettern
+        cols = mfc_analysis["Energy J"].filter(regex=pattern)   
+
+        # Compute the COD event-wise (i.e. row-wise) min, max, mean
+        summary[mfc_type] = {
+            "min": cols.min(axis=1),
+            "max": cols.max(axis=1),
+            "mean": cols.mean(axis=1)
+        }
+
+        number_of_COD_events = len(summary[mfc_type]["mean"])
+
+        COD_event_numbers = range(number_of_COD_events)
+
+        # Plot COD event-wise mean
+        plt.plot(COD_event_numbers, 
+                 summary[mfc_type]["mean"], 
+                 label=mfc_type)
+
+        # Shade area between min and max
+        plt.fill_between(COD_event_numbers, 
+                         summary[mfc_type]['min'], 
+                         summary[mfc_type]['max'], 
+                         alpha=0.3)
+
+    plt.legend()
+    plt.xticks(COD_event_numbers)  # only integers
+    plt.xlabel('COD event index')
+    plt.ylabel('Delay from COD event to voltage peak (days)')
+    plt.savefig("figs/Spike_delay_days.png")
+    plt.show()
+
+    print(summary)
+
+    # ---------------------------------------------------------------
+    # -------- Vpeak vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
+    # ---------------------------------------------------------------
+
+    # ---------------------------------------------------------------
+    # -------- Ppeak vs COD, coloured by resistance, seperate plot or marker style for each MFC type  ---------
+    # ---------------------------------------------------------------
+
 
 
 if __name__ == "__main__":
