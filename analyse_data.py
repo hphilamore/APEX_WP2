@@ -29,13 +29,17 @@ def main():
 
     # Dictionary to store computed/extracted parameters
     mfc_analysis = {
-        "Energy J": {},
-        "Resistance kOhms" : {},
         "COD" : {},
+        "Resistance kOhms" : {},
         "Vpeak mV": {}, 
         "Ppeak W": {}, 
-        "Spike delay (days)" : {},
+        "Rise time (days)" : {},
+        "Decay slope (V per s)" : {},
+        "Energy J": {},
     }
+
+    # Dates to index mfc analysis dictionary with 
+    cod_events_dates = []
 
     # Iterate over MFCs 
     for d in all_data_separate:
@@ -43,44 +47,33 @@ def main():
         print(d)
         data = all_data_separate[d]
 
-        # ------------------------------
-        # -------- Extract COD ---------
-        # ------------------------------
-        
+        # Add column showing MFC power output
+        data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
+
+        for key in mfc_analysis:
+            mfc_analysis[key][d] = []
+
+        # ------------------------------------------------------
+        # -------- Extract features for each COD event ---------
+        # ------------------------------------------------------
+
+        # -------- COD events ---------
         # Get date-time index of COD events
         cod_events_idx = data.index[data["COD_event"] == 1]
+
+        if not cod_events_dates:
+            cod_events_dates = [d.isoformat() for d in cod_events_idx.date.tolist()]
+            
 
         # Store COD values
         mfc_analysis["COD"][d] = list(data.loc[cod_events_idx, "COD"])
 
-        # -------------------------------------
-        # -------- Extract Resistance ---------
-        # -------------------------------------
-        
+        # -------- Resistance --------
         # Store Resistance values
         mfc_analysis["Resistance kOhms"][d] = list(data.loc[cod_events_idx, "Resistance kOhms"])
 
-        # --------------------------------------------------------------
-        # -------- Compute values for each event in COD window ---------
-        # --------------------------------------------------------------
-
-        # Arrays to store values computed for each COD event
+        # Arrays to store index of voltage peaks for each COD event
         voltage_peaks_idx = []
-        power_peaks_idx = []
-        voltage_peaks = []
-        power_peaks = []
-        energy = []
-
-        # print(data["Voltage mV"][:10])
-
-        # Compute mfc power output time series
-        data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
-
-        # print(data['Power W'][:10])
-
-        # -------------------------------------------------
-        # -------- Compute peak power and voltage ---------
-        # -------------------------------------------------
 
         # Get window of data following each COD event
         for i in range(len(cod_events_idx)):
@@ -93,34 +86,65 @@ def main():
                 mask = (data.index >= start) 
             window = data.loc[mask]
 
-            # Find peak voltage and power values in this window
-            for parameter, idxs, vals in zip(
-                                            ['Voltage mV', 'Power W'], 
-                                            [voltage_peaks_idx, power_peaks_idx],
-                                            [voltage_peaks, power_peaks]
-                                            ):
-                # Get the window of data for the selected parameter (voltage or power)
-                param = window[parameter]
+            # Get the window of voltage data
+            V_window = window['Voltage mV']
 
-                # If there is data in the window, compute the max value
-                if param.notna().any():
-                    peak_idx = param.idxmax()
-                    peak_val = param.loc[peak_idx]
-                else:
-                    peak_idx = None
-                    peak_val = None
-                    
-    #             # print('Peak '+ parameter + ':', peak_idx, peak_val)
+            # If there is data in the window
+            if V_window.notna().any():
 
-                # Store index of the peak
-                idxs.append(peak_idx)
-                vals.append(peak_val)
+                # -------- Index of the max voltage value --------
+                peak_idx = V_window.idxmax()
+ 
+                # -------- Rise time (time from COD event to voltage peak) --------
+                rise_time = (peak_idx - start).total_seconds() / (60 * 60 * 24)
 
-            # -------------------------------------------
-            # -------- Compute Energy generated ---------
-            # -------------------------------------------
+                # -------- Max voltage value --------
+                V_peak = V_window.loc[peak_idx]
 
-            # Get the time axis of the window 
+                # -------- Power at the max voltage value --------
+                P_window = window['Power W']
+                P_peak = P_window.loc[peak_idx]
+
+                # -------- Decay slope --------
+                # Define end of window
+                window_end = window.index[-1]
+
+                # Get closest index 1 day after peak
+                # one_day_after_peak = peak_idx + pd.Timedelta(days=1)
+                one_hour_after_peak = peak_idx + pd.Timedelta(hours=1)
+                one_hour_after_peak = window.index.asof(one_hour_after_peak)
+
+                # Take whichever comes first as end of slope period
+                t_end = min(one_hour_after_peak, window_end)
+                # print(t_end)
+
+                # Compute time difference in seconds
+                dt = (t_end - peak_idx).total_seconds()
+                # print(dt)
+
+                # Compute the slope of voltage decay w.r.t time 
+                decay_slope = (V_window.loc[t_end] - V_peak) / dt
+                # print(V_window.loc[t_end])
+                # print(decay_slope)
+                # print()
+
+            else:
+                peak_idx = None
+                V_peak = None
+                P_peak = None
+                rise_time = np.nan
+                decay_slope = np.nan
+
+            voltage_peaks_idx.append(peak_idx)
+            mfc_analysis["Vpeak mV"][d].append(V_peak)
+            mfc_analysis["Ppeak W"][d].append(P_peak)
+            mfc_analysis["Rise time (days)"][d].append(round(rise_time, 6))
+            mfc_analysis["Decay slope (V per s)"][d].append(round(decay_slope, 6))
+
+            
+            # -------- Energy generated per COD event ---------
+
+            # Time axis of the window is every value minus the start value, expressed in seconds
             t = (window.index - window.index[0]).total_seconds()
 
             # Get the power values in the window
@@ -128,55 +152,24 @@ def main():
 
             # Replace any nan power values with 0
             power = np.nan_to_num(power, nan=0.0)
-
-            # print(t[:10])
-            # print(power[:10])
             
             # Compute the total energy as the time integral of power
-            energy.append(np.trapezoid(power, t))
-
-        # --------------------------------------
-        # -------- Store energy values ---------
-        # --------------------------------------
-        mfc_analysis["Energy J"][d] = energy
+            mfc_analysis["Energy J"][d].append(np.trapezoid(power, t))
 
         # -----------------------------------------------
-        # -------- Store and plot voltage peaks ---------
+        # -------- Plot voltage peaks ---------
         # -----------------------------------------------
-
-        mfc_analysis["Vpeak mV"][d] = voltage_peaks
 
         # Plot voltage data, showing peaks
         plot_data(data, 
                   ["Voltage mV"], 
                   title=d, 
                   voltage_peaks=voltage_peaks_idx,
-                  show_days=True,
+                  show_days=False,
                   show_plot=False
                   )
 
-        # --------------------------------------
-        # -------- Store power peaks -----------
-        # --------------------------------------
-
-        mfc_analysis["Ppeak W"][d] = power_peaks
-        
-        # -----------------------------------------------------------------
-        # -------- Store delay between COD event and voltage peak ---------
-        # -----------------------------------------------------------------
-
-        # Compute and store delay between COD event and voltage spike
-        spike_delay_days = []
-        for c, v in zip(cod_events_idx, voltage_peaks_idx):
-            if v:
-                delay = (v - c).total_seconds() / (60 * 60 * 24)
-            else:
-                delay = np.nan
-            spike_delay_days.append(delay)
-        # Round to 6 d.p.
-        spike_delay_days = [round(i, 6) for i in spike_delay_days]
-        mfc_analysis["Spike delay (days)"][d] = spike_delay_days
-
+      
     # ---------------------------------------------------------------
     # -------- Statistical analysis of MFCs grouped by type ---------
     # ---------------------------------------------------------------
@@ -191,10 +184,14 @@ def main():
                 {k: pd.Series(v) for k, v in mfc_analysis[sheet].items()}
                 )
             
-            # Write to excel file
-            # mfc_analysis[sheet].to_excel(writer, sheet_name=sheet, index=False)
-            mfc_analysis[sheet].to_excel(writer, sheet_name=sheet)
+            # Set custom index
+            mfc_analysis[sheet].index = cod_events_dates
 
+            # Name the index column
+            mfc_analysis[sheet].index.name = "Date"
+            
+            # Write to excel file
+            mfc_analysis[sheet].to_excel(writer, sheet_name=sheet)
 
     # Regex patterns for each MFC type to filter data
     patterns = {
@@ -205,9 +202,9 @@ def main():
     }
 
     # ---------------------------------------------------------------
-    # -------- Min, max, mean spike delay and total energy for each COD event ---------
+    # -------- Min, max, mean rise time and total energy for each COD event ---------
     # ---------------------------------------------------------------
-    for parameter in ["Spike delay (days)", "Energy J"]:
+    for parameter in ["Rise time (days)", "Energy J"]:
     
         summary = {}
 
@@ -245,9 +242,9 @@ def main():
         plt.xlabel('COD event index')
         plt.ylabel(parameter)
         plt.savefig(f"figs/{parameter}.png")
-        plt.show()
+        # plt.show()
 
-        print(summary)
+        # print(summary)
 
     
     # ---------------------------------------------------------------
@@ -350,7 +347,7 @@ def main():
             plt.subplots_adjust(right=0.75)
             plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
             plt.savefig(f"figs/{parameter} vs COD - {mfc_type}.png")
-            plt.show()
+            # plt.show()
 
 if __name__ == "__main__":
     main()
