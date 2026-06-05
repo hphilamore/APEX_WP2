@@ -154,9 +154,11 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
 
             # Replace any nan power values with 0
             power = np.nan_to_num(power, nan=0.0)
+
+            energy = np.trapezoid(power, t)
             
             # Compute the total energy as the time integral of power
-            mfc_analysis["Energy J"][d].append(np.trapezoid(power, t))
+            mfc_analysis["Energy J"][d].append(round(energy, 3))
 
         # -----------------------------------------------
         # -------- Plot voltage peaks ---------
