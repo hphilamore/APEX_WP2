@@ -41,8 +41,8 @@ def import_data(file_path):
     # df = pd.DataFrame(all_data)
     pd.to_pickle(all_data, "all_data.pkl")
 
-    # dfs = {name: pd.DataFrame(sheet) for name, sheet in all_data_separate.items()}
-    pd.to_pickle(all_data_separate, "all_data_separate.pkl")
+    # # dfs = {name: pd.DataFrame(sheet) for name, sheet in all_data_separate.items()}
+    # pd.to_pickle(all_data_separate, "all_data_separate.pkl")
 
 if __name__ == "__main__":
     import_data(raw_data_file_path)
