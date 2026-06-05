@@ -6,9 +6,9 @@ from read_excel_data_funcs import *
 # import torch.nn as nn
 # import torch.nn.functional as F
 
-file_path = "Biosensor data from the start (13-06-24) until 06-01-25.xlsx"
+raw_data_file_path = "Biosensor data from the start (13-06-24) until 06-01-25.xlsx"
 
-def main():
+def import_data(file_path):
 
     # Import data as multi-sheet data frame 
     data = import_excel_data(file_path)
@@ -45,4 +45,4 @@ def main():
     pd.to_pickle(all_data_separate, "all_data_separate.pkl")
 
 if __name__ == "__main__":
-    main()
+    import_data(raw_data_file_path)
