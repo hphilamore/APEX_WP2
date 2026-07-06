@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from read_excel_data_funcs import *
 
+# Regex patterns for each MFC type to filter data
 patterns = {
         "10x10_AC": r"10\*10\s*AC",
         "20x30_AC": r"20\*30\s*AC",
@@ -19,13 +20,13 @@ def analyse_basic_statistics(file_path="mfc_analysis.xlsx"):
     # ---------------------------------------------------------------
     # -------- Statistical analysis of MFCs grouped by type ---------
     # ---------------------------------------------------------------
-    # Regex patterns for each MFC type to filter data
-    patterns = {
-        "10x10_AC": r"10\*10\s*AC",
-        "20x30_AC": r"20\*30\s*AC",
-        "10x10": r"10\*10(?!\s*AC)",   # match 10*10 NOT followed by AC
-        "20x30": r"20\*30(?!\s*AC)"    # match 20*30 NOT followed by AC
-    }
+    # # Regex patterns for each MFC type to filter data
+    # patterns = {
+    #     "10x10_AC": r"10\*10\s*AC",
+    #     "20x30_AC": r"20\*30\s*AC",
+    #     "10x10": r"10\*10(?!\s*AC)",   # match 10*10 NOT followed by AC
+    #     "20x30": r"20\*30(?!\s*AC)"    # match 20*30 NOT followed by AC
+    # }
 
     # ---------------------------------------------------------------
     # -------- Min, max, mean spike delay and total energy for each COD event ---------
