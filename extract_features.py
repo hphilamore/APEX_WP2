@@ -1,10 +1,14 @@
 import pandas as pd
 import numpy as np
 from read_excel_data_funcs import *
+import pickle
 
-feature_data_file_path = "mfc_analysis.xlsx"
+# feature_data_file_path = "mfc_features.xlsx"
+feature_data_file_path = "mfc_features.pkl"
 
-def extract_features_to_excel(output_file_path=feature_data_file_path):
+# def extract_features_to_excel(output_file_path=feature_data_file_path):
+def extract_and_store_features(output_file_path=feature_data_file_path):
+
     # Load stored data
     all_data = pd.read_pickle("all_data.pkl")
 
@@ -30,7 +34,7 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
     # ---------------------------------------------------------------
 
     # Dictionary to store computed/extracted parameters
-    mfc_analysis = {
+    mfc_features = {
         "COD" : {},
         "Resistance kOhms" : {},
         "Vpeak mV": {}, 
@@ -38,10 +42,13 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
         "Rise time (days)" : {},
         "Decay slope (V per s)" : {},
         "Energy J": {},
+        "Vwindow mV": {},
+        "Pwindow W": {},
     }
 
     # Dates to index mfc analysis dictionary with 
     cod_events_dates = []
+    # cod_events_idx = []
 
     # Iterate over MFCs 
     for d in all_data_separate:
@@ -52,27 +59,32 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
         # Add column showing MFC power output
         data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
 
-        for key in mfc_analysis:
-            mfc_analysis[key][d] = []
+        for key in mfc_features:
+            mfc_features[key][d] = []
 
         # ------------------------------------------------------
         # -------- Extract features for each COD event ---------
         # ------------------------------------------------------
 
         # -------- COD events ---------
-        # Get date-time index of COD events
+        # Get date-time index of COD events 
         cod_events_idx = data.index[data["COD_event"] == 1]
+        # print(cod_events_idx)
 
-        if not cod_events_dates:
-            cod_events_dates = [d.isoformat() for d in cod_events_idx.date.tolist()]
-            
+        # # Store the date of each COD event for the first MFC in the data set to use later as an index for all MFCs
+        if len(cod_events_dates) == 0:
+            cod_events_dates = cod_events_idx.strftime('%Y-%m-%d').tolist()
+            print(cod_events_dates)
+            # Save list of COD event date-time indexes 
+            with open("COD_event_dates.pkl", "wb") as f:
+                pickle.dump(cod_events_dates, f)
 
         # Store COD values
-        mfc_analysis["COD"][d] = list(data.loc[cod_events_idx, "COD"])
+        mfc_features["COD"][d] = list(data.loc[cod_events_idx, "COD"])
 
         # -------- Resistance --------
         # Store Resistance values
-        mfc_analysis["Resistance kOhms"][d] = list(data.loc[cod_events_idx, "Resistance kOhms"])
+        mfc_features["Resistance kOhms"][d] = list(data.loc[cod_events_idx, "Resistance kOhms"])
 
         # Arrays to store index of voltage peaks for each COD event
         voltage_peaks_idx = []
@@ -138,14 +150,18 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
                 decay_slope = np.nan
 
             voltage_peaks_idx.append(peak_idx)
-            mfc_analysis["Vpeak mV"][d].append(V_peak)
-            mfc_analysis["Ppeak W"][d].append(P_peak)
-            mfc_analysis["Rise time (days)"][d].append(round(rise_time, 6))
-            mfc_analysis["Decay slope (V per s)"][d].append(round(decay_slope, 6))
+
+
+            # Store features for this data window
+            mfc_features["Vwindow mV"][d].append(V_window.tolist())
+            mfc_features["Pwindow W"][d].append(P_window.tolist())
+            mfc_features["Vpeak mV"][d].append(V_peak)
+            mfc_features["Ppeak W"][d].append(P_peak)
+            mfc_features["Rise time (days)"][d].append(round(rise_time, 6))
+            mfc_features["Decay slope (V per s)"][d].append(round(decay_slope, 6))
 
             
             # -------- Energy generated per COD event ---------
-
             # Time axis of the window is every value minus the start value, expressed in seconds
             t = (window.index - window.index[0]).total_seconds()
 
@@ -155,10 +171,10 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
             # Replace any nan power values with 0
             power = np.nan_to_num(power, nan=0.0)
 
-            energy = np.trapezoid(power, t)
-            
             # Compute the total energy as the time integral of power
-            mfc_analysis["Energy J"][d].append(round(energy, 3))
+            energy = np.trapezoid(power, t)
+
+            mfc_features["Energy J"][d].append(round(energy, 3))
 
         # -----------------------------------------------
         # -------- Plot voltage peaks ---------
@@ -174,207 +190,58 @@ def extract_features_to_excel(output_file_path=feature_data_file_path):
                   )
 
 
-# def extract_features_to_excel(output_file_path=feature_data_file_path):
-#     # Load stored data
-#     all_data = pd.read_pickle("all_data.pkl")
+    # Save nested dictionary of {features : {mfc names : mfc data}} to pickle file
+    with open(output_file_path, 'wb') as f:
+        pickle.dump(mfc_features, f)
 
-#     # Convert index to date time format
-#     all_data = all_data.set_index("datetime", drop=False).sort_index()
 
-#     # Select date range to work on 
-#     all_data = all_data.loc["2024-08-01":"2024-12-31 23:59:59"]
-#     # all_data = all_data.loc["2025-01-01":"2025-12-31 23:59:59"]
 
-#     # Get names of columns containing MFC voltage data
-#     mfc_column_names = extract_mfc_column_names(all_data)
 
-#     # Plot all voltage data
-#     plot_data(all_data, cols_to_plot=mfc_column_names, title="all MFCs", 
-#               show_plot=True
-#               )
 
-#     # Separate into dictionary of indiviudal MFCs time series data
-#     all_data_separate = separate_mfc_data(all_data, mfc_column_names)
+    # # ---------------------------------------------------------------
+    # # -------- Save COD event features to excel file ---------
+    # # ---------------------------------------------------------------
 
-#     # ---------------------------------------------------------------
-#     # Compute/extract parameters for each COD event, for each MFC
-#     # ---------------------------------------------------------------
+    # print(type(cod_events_idx[0]))
 
-#     # Dictionary to store computed/extracted parameters
-#     mfc_analysis = {
-#         "Energy J": {},
-#         "Resistance kOhms" : {},
-#         "COD" : {},
-#         "Vpeak mV": {}, 
-#         "Ppeak W": {}, 
-#         "Rise time (days)" : {},
-#     }
+    # # cod_events_idx = [d.strftime('%d/%m/%Y') for d in cod_events_idx.date]
 
-#     # Iterate over MFCs 
-#     for d in all_data_separate:
-#         print()
-#         print(d)
-#         data = all_data_separate[d]
+    # print(type(cod_events_idx[0]))
 
-#         # ------------------------------
-#         # -------- Extract COD ---------
-#         # ------------------------------
-        
-#         # Get date-time index of COD events
-#         cod_events_idx = data.index[data["COD_event"] == 1]
 
-#         # Store COD values
-#         mfc_analysis["COD"][d] = list(data.loc[cod_events_idx, "COD"])
+    # # # # Save features and time series data to pickle file
+    # # # with open('mfc_features.pkl', 'wb') as f:
+    # # #     pickle.dump(mfc_features, f)
 
-#         # -------------------------------------
-#         # -------- Extract Resistance ---------
-#         # -------------------------------------
-        
-#         # Store Resistance values
-#         mfc_analysis["Resistance kOhms"][d] = list(data.loc[cod_events_idx, "Resistance kOhms"])
+    # # Convert each feature to datastrcuture and save features to excel file  
+    # with pd.ExcelWriter(output_file_path) as writer:
 
-#         # --------------------------------------------------------------
-#         # -------- Compute values for each event in COD window ---------
-#         # --------------------------------------------------------------
+    #     for sheet in mfc_features:
 
-#         # Arrays to store values computed for each COD event
-#         voltage_peaks_idx = []
-#         power_peaks_idx = []
-#         voltage_peaks = []
-#         power_peaks = []
-#         energy = []
+    #         # Don't save long time series data to excel
+    #         if sheet in ["Vwindow mV", "Pwindow W"]:
+    #             continue
 
-#         # print(data["Voltage mV"][:10])
-
-#         # Compute mfc power output time series
-#         data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
-
-#         # Get window of data following each COD event
-#         for i in range(len(cod_events_idx)):
-#             start = cod_events_idx[i] 
-#             if i < len(cod_events_idx) - 1:
-#                 end = cod_events_idx[i+1]
-#                 mask = (data.index >= start) & (data.index < end)
-#             # Last segment of data 
-#             else:
-#                 mask = (data.index >= start) 
-#             window = data.loc[mask]
-
-#             # Find peak voltage and power values in this window
-#             for parameter, idxs, vals in zip(
-#                                             ['Voltage mV', 'Power W'], 
-#                                             [voltage_peaks_idx, power_peaks_idx],
-#                                             [voltage_peaks, power_peaks]
-#                                             ):
-#                 # Get the window of data for the selected parameter (voltage or power)
-#                 param = window[parameter]
-
-#                 # If there is data in the window, compute the max value
-#                 if param.notna().any():
-#                     peak_idx = param.idxmax()
-#                     peak_val = param.loc[peak_idx]
-#                 else:
-#                     peak_idx = None
-#                     peak_val = None
-                    
-#     #             # print('Peak '+ parameter + ':', peak_idx, peak_val)
-
-#                 # Store index of the peak
-#                 idxs.append(peak_idx)
-#                 vals.append(peak_val)
-
-#             # -------------------------------------------
-#             # -------- Compute Energy generated ---------
-#             # -------------------------------------------
-
-#             # Get the time axis of the window 
-#             t = (window.index - window.index[0]).total_seconds()
-
-#             # Get the power values in the window
-#             power = window['Power W'].values
-
-#             # Replace any nan power values with 0
-#             power = np.nan_to_num(power, nan=0.0)
-
-#             # print(t[:10])
-#             # print(power[:10])
+    #         # Convert all nested dictionaries to DataFrames in place
+    #         mfc_features[sheet] = pd.DataFrame(
+    #             {k: pd.Series(v) for k, v in mfc_features[sheet].items()}
+    #             )
             
-#             # Compute the total energy as the time integral of power
-#             energy.append(np.trapezoid(power, t))
+    #         # Set your custom datetime index
+    #         mfc_features[sheet].index = cod_events_idx
 
-#         # --------------------------------------
-#         # -------- Store energy values ---------
-#         # --------------------------------------
-#         mfc_analysis["Energy J"][d] = energy
+    #         # Name it so Excel column is labeled nicely
+    #         mfc_features[sheet].index.name = "Date"
 
-#         # -----------------------------------------------
-#         # -------- Store and plot voltage peaks ---------
-#         # -----------------------------------------------
+    #         # Write to excel file
+    #         # mfc_features[sheet].to_excel(writer, sheet_name=sheet, index=False)
+    #         mfc_features[sheet].to_excel(writer, sheet_name=sheet)
 
-#         mfc_analysis["Vpeak mV"][d] = voltage_peaks
-
-#         # Plot voltage data, showing peaks
-#         plot_data(data, 
-#                   ["Voltage mV"], 
-#                   title=d, 
-#                   voltage_peaks=voltage_peaks_idx,
-#                   show_days=True,
-#                   show_plot=False
-#                   )
-
-#         # --------------------------------------
-#         # -------- Store power peaks -----------
-#         # --------------------------------------
-
-#         mfc_analysis["Ppeak W"][d] = power_peaks
-        
-#         # -----------------------------------------------------------------
-#         # -------- Store delay between COD event and voltage peak ---------
-#         # -----------------------------------------------------------------
-
-#         # Compute and store delay between COD event and voltage spike
-#         spike_delay_days = []
-#         for c, v in zip(cod_events_idx, voltage_peaks_idx):
-#             if v:
-#                 delay = (v - c).total_seconds() / (60 * 60 * 24)
-#             else:
-#                 delay = np.nan
-#             spike_delay_days.append(delay)
-#         # Round to 6 d.p.
-#         spike_delay_days = [round(i, 6) for i in spike_delay_days]
-#         mfc_analysis["Rise time (days)"][d] = spike_delay_days
-
-    # ---------------------------------------------------------------
-    # -------- Save COD event features to excel file ---------
-    # ---------------------------------------------------------------
-
-    # print('COD events', cod_events_idx)
-
-    cod_events_idx = [d.strftime('%d/%m/%Y') for d in cod_events_idx.date]
-
-    # print('COD events', cod_events_idx)
-
-    # Save COD event parameters to excel file  
-    with pd.ExcelWriter(output_file_path) as writer:
-
-        for sheet in mfc_analysis:
-
-            # Convert all nested dictionaries to DataFrames in place
-            mfc_analysis[sheet] = pd.DataFrame(
-                {k: pd.Series(v) for k, v in mfc_analysis[sheet].items()}
-                )
-            
-            # Set your custom datetime index
-            mfc_analysis[sheet].index = cod_events_idx
-
-            # Name it so Excel column is labeled nicely
-            mfc_analysis[sheet].index.name = "Date"
-
-            # Write to excel file
-            # mfc_analysis[sheet].to_excel(writer, sheet_name=sheet, index=False)
-            mfc_analysis[sheet].to_excel(writer, sheet_name=sheet)
+    # # Save features and time series data to pickle file
+    # with open('mfc_features.pkl', 'wb') as f:
+    #     pickle.dump(mfc_features, f)
 
 
 if __name__ == "__main__":
-    extract_features_to_excel(output_file_path=feature_data_file_path)
+    extract_and_store_features(output_file_path=feature_data_file_path)
 
