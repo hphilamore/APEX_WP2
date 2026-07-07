@@ -4,13 +4,14 @@ from read_excel_data_funcs import *
 import pickle
 
 # feature_data_file_path = "mfc_features.xlsx"
-feature_data_file_path = "mfc_features.pkl"
+feature_data_file_name = "mfc_features"
 
 # def extract_features_to_excel(output_file_path=feature_data_file_path):
-def extract_and_store_features(output_file_path=feature_data_file_path):
+def extract_and_store_features(input_file_path="all_data.pkl", 
+                               output_file_name=feature_data_file_name):
 
     # Load stored data
-    all_data = pd.read_pickle("all_data.pkl")
+    all_data = pd.read_pickle(input_file_path)
 
     # Convert index to date time format
     all_data = all_data.set_index("datetime", drop=False).sort_index()
@@ -22,7 +23,8 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
     mfc_column_names = extract_mfc_column_names(all_data)
 
     # Plot all voltage data
-    plot_data(all_data, cols_to_plot=mfc_column_names, title="all MFCs", 
+    plot_data(all_data, cols_to_plot=mfc_column_names, 
+              title="all MFCs", 
               show_plot=False
               )
 
@@ -193,7 +195,7 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
 
 
     # Save nested dictionary of {features : {mfc names : mfc data}} to pickle file
-    with open(output_file_path, 'wb') as f:
+    with open(output_file_name+".pkl", 'wb') as f:
         pickle.dump(mfc_features, f)
 
 
@@ -215,29 +217,27 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
     # # # with open('mfc_features.pkl', 'wb') as f:
     # # #     pickle.dump(mfc_features, f)
 
-    # # Convert each feature to datastrcuture and save features to excel file  
-    # with pd.ExcelWriter(output_file_path) as writer:
+    # Convert each feature to datastrcuture in order to save to excel file for human readbility   
+    with pd.ExcelWriter(output_file_name+".xlsx") as writer:
 
-    #     for sheet in mfc_features:
+        for sheet in mfc_features:
 
-    #         # Don't save long time series data to excel
-    #         if sheet in ["Vwindow mV", "Pwindow W"]:
-    #             continue
+            # Skip time series data
+            if sheet in ["Vwindow mV", "Pwindow W"]:
+                continue
 
-    #         # Convert all nested dictionaries to DataFrames in place
-    #         mfc_features[sheet] = pd.DataFrame(
-    #             {k: pd.Series(v) for k, v in mfc_features[sheet].items()}
-    #             )
+            # Convert each feature to dataframe with all mfc columns
+            df = pd.DataFrame({k: pd.Series(v) for k, v in mfc_features[sheet].items()})
             
-    #         # Set your custom datetime index
-    #         mfc_features[sheet].index = cod_events_idx
+            # Set your custom datetime index
+            df.index = cod_events_idx
 
-    #         # Name it so Excel column is labeled nicely
-    #         mfc_features[sheet].index.name = "Date"
+            # Name it so Excel column is labeled nicely
+            df.index.name = "Date"
 
-    #         # Write to excel file
-    #         # mfc_features[sheet].to_excel(writer, sheet_name=sheet, index=False)
-    #         mfc_features[sheet].to_excel(writer, sheet_name=sheet)
+            # Write to excel file
+            # mfc_features[sheet].to_excel(writer, sheet_name=sheet, index=False)
+            df.to_excel(writer, sheet_name=sheet)
 
     # # Save features and time series data to pickle file
     # with open('mfc_features.pkl', 'wb') as f:
@@ -245,5 +245,6 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
 
 
 if __name__ == "__main__":
-    extract_and_store_features(output_file_path=feature_data_file_path)
+    extract_and_store_features(input_file_path="all_data.pkl",
+                               output_file_name=feature_data_file_name)
 
