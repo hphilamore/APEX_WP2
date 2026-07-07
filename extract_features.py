@@ -27,7 +27,7 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
               )
 
     # Separate into dictionary of indiviudal MFCs time series data
-    all_data_separate = separate_mfc_data(all_data, mfc_column_names)
+    all_mfc_data_separate = separate_mfc_data(all_data, mfc_column_names)
 
     # ---------------------------------------------------------------
     # Compute/extract parameters for each COD event, for each MFC
@@ -35,6 +35,7 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
 
     # Dictionary to store computed/extracted parameters
     mfc_features = {
+        "COD date time index" : {},
         "COD" : {},
         "Resistance kOhms" : {},
         "Vpeak mV": {}, 
@@ -47,20 +48,20 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
     }
 
     # Dates to index mfc analysis dictionary with 
-    cod_events_dates = []
+    # cod_events_dates = []
     # cod_events_idx = []
 
     # Iterate over MFCs 
-    for d in all_data_separate:
+    for mfc in all_mfc_data_separate:
         print()
-        print(d)
-        data = all_data_separate[d]
+        print(mfc)
+        data = all_mfc_data_separate[mfc]
 
         # Add column showing MFC power output
         data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
 
-        for key in mfc_features:
-            mfc_features[key][d] = []
+        for feature in mfc_features:
+            mfc_features[feature][mfc] = []
 
         # ------------------------------------------------------
         # -------- Extract features for each COD event ---------
@@ -69,22 +70,23 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
         # -------- COD events ---------
         # Get date-time index of COD events 
         cod_events_idx = data.index[data["COD_event"] == 1]
+        mfc_features["COD date time index"][mfc] = cod_events_idx
         # print(cod_events_idx)
 
-        # # Store the date of each COD event for the first MFC in the data set to use later as an index for all MFCs
-        if len(cod_events_dates) == 0:
-            cod_events_dates = cod_events_idx.strftime('%Y-%m-%d').tolist()
-            print(cod_events_dates)
-            # Save list of COD event date-time indexes 
-            with open("COD_event_dates.pkl", "wb") as f:
-                pickle.dump(cod_events_dates, f)
+        # # # Store the date of each COD event for the first MFC in the data set to use later as an index for all MFCs
+        # if len(cod_events_dates) == 0:
+        #     cod_events_dates = cod_events_idx.strftime('%Y-%m-%d').tolist()
+        #     print(cod_events_dates)
+        #     # Save list of COD event date-time indexes 
+        #     with open("COD_event_dates.pkl", "wb") as f:
+        #         pickle.dump(cod_events_dates, f)
 
         # Store COD values
-        mfc_features["COD"][d] = list(data.loc[cod_events_idx, "COD"])
+        mfc_features["COD"][mfc] = list(data.loc[cod_events_idx, "COD"])
 
         # -------- Resistance --------
         # Store Resistance values
-        mfc_features["Resistance kOhms"][d] = list(data.loc[cod_events_idx, "Resistance kOhms"])
+        mfc_features["Resistance kOhms"][mfc] = list(data.loc[cod_events_idx, "Resistance kOhms"])
 
         # Arrays to store index of voltage peaks for each COD event
         voltage_peaks_idx = []
@@ -153,12 +155,12 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
 
 
             # Store features for this data window
-            mfc_features["Vwindow mV"][d].append(V_window.tolist())
-            mfc_features["Pwindow W"][d].append(P_window.tolist())
-            mfc_features["Vpeak mV"][d].append(V_peak)
-            mfc_features["Ppeak W"][d].append(P_peak)
-            mfc_features["Rise time (days)"][d].append(round(rise_time, 6))
-            mfc_features["Decay slope (V per s)"][d].append(round(decay_slope, 6))
+            mfc_features["Vwindow mV"][mfc].append(V_window.tolist())
+            mfc_features["Pwindow W"][mfc].append(P_window.tolist())
+            mfc_features["Vpeak mV"][mfc].append(V_peak)
+            mfc_features["Ppeak W"][mfc].append(P_peak)
+            mfc_features["Rise time (days)"][mfc].append(round(rise_time, 6))
+            mfc_features["Decay slope (V per s)"][mfc].append(round(decay_slope, 6))
 
             
             # -------- Energy generated per COD event ---------
@@ -174,7 +176,7 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
             # Compute the total energy as the time integral of power
             energy = np.trapezoid(power, t)
 
-            mfc_features["Energy J"][d].append(round(energy, 3))
+            mfc_features["Energy J"][mfc].append(round(energy, 3))
 
         # -----------------------------------------------
         # -------- Plot voltage peaks ---------
@@ -183,7 +185,7 @@ def extract_and_store_features(output_file_path=feature_data_file_path):
         # Plot voltage data, showing peaks
         plot_data(data, 
                   ["Voltage mV"], 
-                  title=d, 
+                  title=mfc, 
                   voltage_peaks=voltage_peaks_idx,
                   show_days=False,
                   show_plot=False

@@ -12,30 +12,31 @@ from sklearn.metrics import mean_squared_error, r2_score
 import pickle
 
 
-def load_series(data, sheet_name, col_name, year):
+def extract_data_subset(data, sheet_name, col_name, year, resistance):
 
-    # Load feature
-    df = data[sheet_name].copy()
+    # Load date-time index for selected mfc
+    COD_date_time_index = data['COD date time index'][col_name].copy()
 
-    # # Get the name of the first column
-    # time_col = df.columns[0]
+    # Load resistance data for selected mfc
+    resistance_column = data['Resistance kOhms'][col_name].copy()
 
-    # # Convert using column name 
-    # df[time_col] = pd.to_datetime(df[time_col].astype(str), errors='coerce', dayfirst=True)
-
-    # # Filter rows to select section of time series
-    # df_by_year = df[df[time_col].dt.year == year] 
+    # Load feature  for selected mfc
+    feature = data[sheet_name][col_name].copy()
 
     # Filter column to include data from selected year only
-    df.index = pd.to_datetime(df.index, format='%d/%m/%Y')
+    mask_cod = COD_date_time_index.year == year
+    mask_resistance = [r == resistance for r in resistance_column]
+    feature = [f for f, c, r in zip(feature, mask_cod, mask_resistance) if c and r]
 
-    df_by_year = df[df.index.year == year]
+    # print(col_name, year, resistance, len(feature))
 
+    # print('Resistance', resistance)
+    # print(resistance_column)
+    # print(mask_cod)
+    # print(mask_resistance)
+    # print('final feature', feature)
 
-    # Extract the required column
-    values = df_by_year[col_name].values
-
-    return values  # return values
+    return feature
 
 
 def all_subsets(lst):
@@ -55,34 +56,17 @@ with open('mfc_features.pkl', 'rb') as f:
     mfc_features = pickle.load(f)
 
 # print(type(mfc_features))
-print(mfc_features['COD'])
+# print(mfc_features['COD'])
 # print(mfc_features['COD']['7) 10*10 -1'])
 
-# # Get the first feature name in the nested dictionary {features : {mfc names : mfc data}} to pickle file
+# Get the column / mfc names from the first dictionary in the nested dictionary of fetaures
 first_feature = next(iter(mfc_features))
 mfc_names = mfc_features[first_feature].keys()
-print(mfc_names)
+# print(mfc_names)
 
+print(mfc_features.keys())
 
-
-# first_sheet = next(iter(mfc_features.values()))
-
-
-
-
-# # Get the first sheet (DataFrame)
-# first_sheet = next(iter(mfc_features.values()))
-
-
-# print(type(first_sheet.index))
-# print(first_sheet.index[:5])
-# print(type(mfc_features['COD'].index))
-
-
-# # Get column names
-# columns = first_sheet.columns.tolist()[1:]
-
-# MFC types to exclude from training and test data
+# MFC types
 # patterns_to_include = [
 mfc_types_all = [
                         r"10\*10\s*AC",
@@ -92,7 +76,7 @@ mfc_types_all = [
                         ]
 
 # pattern_labels = {
-mgc_types_regex_mappings = {
+mfc_types_regex_mappings = {
         r"10\*10\s*AC": "10x10_AC",
         r"20\*30\s*AC": "20x30_AC",
         r"10\*10(?!\s*AC)": "10x10",  # match 10*10 NOT followed by AC
@@ -117,111 +101,142 @@ def build_and_evaluate_ridge():
                                                                                  all_subsets(years_all)):
         # print(subset_mfc_types, subset_resistances, subset_years)
 
-        # Data structures to hold training/test data
-        cod_data = []
-        v_peak_data = []
-        p_peak_data = []
-        energy_data = []
-        resistance_data = []
+        # Data structure to hold training/test data
+        # cod_data = []
+        # v_peak_data = []
+        # p_peak_data = []
+        # energy_data = []
+        # resistance_data = []
+        model_data = {k : [] for k in mfc_features}
 
         # Filter MFC columns, skipping any that aren't in current subset 
         for col in mfc_names:
             if not any(re.search(p, col) for p in subset_mfc_types):
                 continue
 
-            # Filter selected data, selecting only years in current subset 
-            # for year in subset_years:
+            # Filter selected data to include only years and resistances in current subset 
+            for year in subset_years:
 
-                # Get features 
-                # cod = load_series(mfc_features, 'COD', col, year)
-            #     resistance = load_series(mfc_features, 'Resistance kOhms', col, year)
-            #     v_peak = load_series(mfc_features, 'Vpeak mV', col, year)
-            #     p_peak = load_series(mfc_features, 'Ppeak W', col, year)
-            #     energy = load_series(mfc_features, 'Energy J', col, year)
+                for resistance in subset_resistances:
 
+                    # cod_data.extend(extract_data_subset(mfc_features, 'COD', col, year, resistance))
+                    # resistance_data.extend(extract_data_subset(mfc_features, 'Resistance kOhms', col, year, resistance))
+                    # v_peak_data.extend(extract_data_subset(mfc_features, 'Vpeak mV', col, year, resistance))
+                    # p_peak_data.extend(extract_data_subset(mfc_features, 'Ppeak W', col, year, resistance))
+                    # energy_data.extend(extract_data_subset(mfc_features, 'Energy J', col, year, resistance))
+                    # print(col, year, resistance, ', N data points', len(cod_data))
+                    for key in model_data:
+                        model_data[key].extend(extract_data_subset(mfc_features, key, col, year, resistance))
+
+
+        # print('Length of data for config', len(cod_data))
+        # print()
+        
+        # print(v_peak_data)
+        # print(model_data['COD'][:20])
                 
-#                 # Include only desired resistance values
-#                 mask = np.isin(resistance, resistances)
+        # Prepare features and labels
+        labels_for_model = ['COD']
+        features_for_model = ['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
 
-#                 # Apply mask to all aligned series and add features to training data
-#                 cod_data.extend(cod[mask])
-#                 v_peak_data.extend(v_peak[mask])
-#                 p_peak_data.extend(p_peak[mask])
-#                 energy_data.extend(energy[mask])
-#                 resistance_data.extend(resistance[mask])
+        # Create DataFrame from the dictionary to make it easier to remove NaN values
+        df = pd.DataFrame({f: model_data[f] for f in labels_for_model + features_for_model})
 
-#                 cod_values = cod[mask]
+        # Convert everything to numeric; invalid values become NaN
+        df = df.apply(pd.to_numeric, errors='coerce')
+
+        # Drop rows where any value is NaN
+        df = df.dropna()
+
+        # Create y and X data as numpy arrays
+        y = df[labels_for_model].to_numpy()
+
+        X = df[features_for_model].to_numpy()
 
 
-#         # Prepare features and labels
-#         X = np.column_stack((v_peak_data, 
-#                             p_peak_data, 
-#                             energy_data, 
-#                             resistance_data))
 
-#         y = np.array(cod_data)
+        # y = np.array(cod_data)
 
-#         # Drop any NaN values in data
-#         mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
-#         X = X[mask]
-#         y = y[mask]
+        # X = np.column_stack((v_peak_data, 
+        #                      p_peak_data, 
+        #                      energy_data, 
+        #                      resistance_data))
 
-#         # Must be at least 10 data points to be evaluated
-#         # print(len(y))
-#         if len(y) < 10:
-#             continue
+        # y = np.array(model_data['COD'])
 
-#         # Split into training and testing sets
-#         X_train, X_test, y_train, y_test = train_test_split(
-#             X, y, test_size=0.2, random_state=42
-#         )
+        # X = np.column_stack((model_data['Vpeak mV'], 
+        #                 model_data['Ppeak W'], 
+        #                 model_data['Energy J'], 
+        #                 model_data['Resistance kOhms']))
+        
+        # print(y.shape)
+        # print(X.shape)
 
-#         # Create ridge regression model
-#         model = Ridge(alpha=1.0)
+        # print(model_data[['COD', 'Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']].dtypes)
 
-#         # Train the model
-#         model.fit(X_train, y_train)
+        # for k, v in model_data.items():
+        #     print(k, type(v))
+        # Drop any NaN values in data
+        # mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
+        # X = X[mask]
+        # y = y[mask]
 
-#         # Make predictions
-#         y_pred = model.predict(X_test)
+        # Drop any configurations with less than 10 data points
+        # print(len(y))
+        if len(y) < 50:
+            continue
 
-#         # Evaluate
-#         mse = mean_squared_error(y_test, y_pred)
-#         r2 = r2_score(y_test, y_pred)
+        # Split into training and testing sets
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
 
-#         # Store result
-#         results.append({
-#             "patterns": patterns,
-#             "resistances": resistances,
-#             "years": years,
-#             "r2": r2,
-#             "mse": mse,
-#             "coefficients": model.coef_.copy(),
-#             "intercept": model.intercept_,
-#             "n_samples": len(y)
-#             })
+        # Create ridge regression model
+        model = Ridge(alpha=1.0)
 
-#     # Sort results by R² descending
-#     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+        # Train the model
+        model.fit(X_train, y_train)
 
-#     # Get top 5
-#     top_5 = results_sorted[:5]
+        # Make predictions
+        y_pred = model.predict(X_test)
 
-#     print("\nTop 5 configurations:\n")
+        # Evaluate
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
 
-#     for i, res in enumerate(top_5, 1):
-#         print(f"--- Rank {i} ---")
-#         print("MFC types:", [pattern_labels[p] for p in res["patterns"]])
-#         # print("MFC types:", res["patterns"])
-#         print("Resistances kOhm:", res["resistances"])
-#         print("Years:", res["years"])
-#         print("R²:", round(res["r2"], 4))
-#         # print("MSE:", round(res["mse"], 2))
-#         # print("N Samples:", res["n_samples"])
-#         print("Terms:", "v_peak, p_peak, energy, resistance")
-#         print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-#         print("Intercept:", res["intercept"])
-#         print()
+        # Store result
+        results.append({
+            "mfc_types": subset_mfc_types,
+            "resistances": subset_resistances,
+            "years": subset_years,
+            "r2": r2,
+            "mse": mse,
+            "coefficients": model.coef_.copy(),
+            "intercept": model.intercept_,
+            "n_samples": len(y)
+            })
+
+    # Sort results by R² descending
+    results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+
+    # Get top 5
+    top_5 = results_sorted[:5]
+
+    print("\nTop 5 configurations:\n")
+
+    for i, res in enumerate(top_5, 1):
+        print(f"--- Rank {i} ---")
+        print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+        # print("MFC types:", res["mfc_types"])
+        print("Resistances kOhm:", res["resistances"])
+        print("Years:", res["years"])
+        print("R²:", round(res["r2"], 4))
+        # print("MSE:", round(res["mse"], 2))
+        # print("N Samples:", res["n_samples"])
+        print("Terms:", "v_peak, p_peak, energy, resistance")
+        print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+        print("Intercept:", res["intercept"])
+        print()
 
 
 if __name__ == '__main__':
