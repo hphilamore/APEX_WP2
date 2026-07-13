@@ -198,24 +198,12 @@ def extract_and_store_features(input_file_path="all_data.pkl",
     with open(output_file_name+".pkl", 'wb') as f:
         pickle.dump(mfc_features, f)
 
-
-
-
-
     # # ---------------------------------------------------------------
     # # -------- Save COD event features to excel file ---------
     # # ---------------------------------------------------------------
 
-    # print(type(cod_events_idx[0]))
-
-    # # cod_events_idx = [d.strftime('%d/%m/%Y') for d in cod_events_idx.date]
-
-    # print(type(cod_events_idx[0]))
-
-
-    # # # # Save features and time series data to pickle file
-    # # # with open('mfc_features.pkl', 'wb') as f:
-    # # #     pickle.dump(mfc_features, f)
+    # Get string representation of dates of COD events
+    cod_events_str = [d.strftime('%d/%m/%Y') for d in cod_events_idx.date]
 
     # Convert each feature to datastrcuture in order to save to excel file for human readbility   
     with pd.ExcelWriter(output_file_name+".xlsx") as writer:
@@ -230,7 +218,8 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             df = pd.DataFrame({k: pd.Series(v) for k, v in mfc_features[sheet].items()})
             
             # Set your custom datetime index
-            df.index = cod_events_idx
+            # df.index = cod_events_idx
+            df.index = cod_events_str
 
             # Name it so Excel column is labeled nicely
             df.index.name = "Date"
@@ -238,10 +227,6 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             # Write to excel file
             # mfc_features[sheet].to_excel(writer, sheet_name=sheet, index=False)
             df.to_excel(writer, sheet_name=sheet)
-
-    # # Save features and time series data to pickle file
-    # with open('mfc_features.pkl', 'wb') as f:
-    #     pickle.dump(mfc_features, f)
 
 
 if __name__ == "__main__":
