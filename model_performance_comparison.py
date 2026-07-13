@@ -9,6 +9,8 @@ import itertools
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score
 import pickle
 
 
@@ -59,10 +61,15 @@ def prepare_model_data(model_data, labels, features):
     return y, X
 
 
-def evaluate_model_performance(X, y, results, configuration, model, test_size, min_data_points):
+def evaluate_model_performance(X, y, results, configuration, 
+                               model_class, test_size, 
+                               min_data_points):
 
     # Drop any configurations with less than minimum threshold
     if len(y) < min_data_points:
+        print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
+            configuration['subset_resistances'],
+            configuration['subset_years'])
         return
 
     # Split into training and testing sets
@@ -70,35 +77,65 @@ def evaluate_model_performance(X, y, results, configuration, model, test_size, m
         X, y, test_size=test_size, random_state=42
     )
 
-    # Train the model
-    model.fit(X_train, y_train)
+    # Scale all features to mean 0, std 1, to retain feature importance 
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
 
-    # Make predictions
-    y_pred = model.predict(X_test)
+    # Store scores to compare performance using different values of alpha
+    scores = []
 
-    # Evaluate
-    mse = mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
+    alphas = np.logspace(-4, 4, 100)
 
-    # Store result
-    results.append({
-        "mfc_types": configuration['subset_mfc_types'],
-        "resistances": configuration['subset_resistances'],
-        "years": configuration['subset_years'],
-        "r2": r2,
-        "mse": mse,
-        "coefficients": model.coef_.copy(),
-        "intercept": model.intercept_,
-        "n_samples": len(y)
-        })
+    # Hyperparameter sweep to tune alpha for current configuration 
+    for alpha in alphas:
+
+        # model = model_class(alpha=1.0)
+        model = model_class(alpha=alpha)
+
+        # Train the model
+        # model.fit(X_train, y_train)
+        model.fit(X_train_scaled, y_train)
+
+        # Make predictions
+        # y_pred = model.predict(X_test)
+        y_pred = model.predict(X_test_scaled)
+
+        # Evaluate
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+
+        # Store result
+        scores.append({
+            "mfc_types": configuration['subset_mfc_types'],
+            "resistances": configuration['subset_resistances'],
+            "years": configuration['subset_years'],
+            "r2": r2,
+            "mse": mse,
+            "alpha": alpha,
+            "coefficients": model.coef_.copy(),
+            "intercept": model.intercept_,
+            "feature_scales": scaler.scale_.copy(),
+            "n_samples": len(y)
+            })
+        
+    # Sort results by R² descending
+    scores_sorted = sorted(scores, key=lambda x: x["r2"], reverse=True)
+
+    print('Keep config', configuration['subset_mfc_types'],
+            configuration['subset_resistances'],
+            configuration['subset_years'])
+    
+    # Store the best value for this configuration with hyperparameter tuning 
+    results.append(scores_sorted[0])
 
 
 # MFC types
 mfc_types_all = [
-                        r"10\*10\s*AC",
-                        r"20\*30\s*AC",
-                        r"10\*10(?!\s*AC)",
-                        r"20\*30(?!\s*AC)"
+                        # r"10\*10\s*AC",     # Carbon veil + activated carbon
+                        # r"20\*30\s*AC",
+                        r"10\*10(?!\s*AC)", # Carbon veil
+                        # r"20\*30(?!\s*AC)"
                         ]
 
 mfc_types_regex_mappings = {
@@ -134,7 +171,7 @@ def compare_input_data_performance():
     for subset_mfc_types, subset_resistances, subset_years in itertools.product( all_subsets(mfc_types_all),
                                                                                  all_subsets(resistances_all),
                                                                                  all_subsets(years_all)):
-        print(subset_mfc_types, subset_resistances, subset_years)
+        # print(subset_mfc_types, subset_resistances, subset_years)
         configuration = {'subset_mfc_types': subset_mfc_types,
                          'subset_resistances': subset_resistances,
                          'subset_years':subset_years}
@@ -167,14 +204,19 @@ def compare_input_data_performance():
 
         if skip_configuration == False:
         # print(len(model_data['COD']))
+            # print(subset_mfc_types, subset_resistances, subset_years)
+
             y, X = prepare_model_data(model_data, 
                                     labels=['COD'],
                                     features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms'])        
 
             evaluate_model_performance(X, y, results, configuration, 
-                                    model=Ridge(alpha=1.0), 
+                                    # model=Ridge(alpha=1.0), 
+                                    model_class=Ridge, 
                                     test_size=0.2, 
-                                    min_data_points=50)
+                                    min_data_points=25)
+        else:
+            print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
 
     # Sort results by R² descending
     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
@@ -191,7 +233,8 @@ def compare_input_data_performance():
         print("Resistances kOhm:", res["resistances"])
         print("Years:", res["years"])
         print("R²:", round(res["r2"], 4))
-        # print("MSE:", round(res["mse"], 2))
+        print("MSE:", round(res["mse"], 2))
+        print("Alpha:", res["alpha"]),
         # print("N Samples:", res["n_samples"])
         print("Terms:", "v_peak, p_peak, energy, resistance")
         print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
