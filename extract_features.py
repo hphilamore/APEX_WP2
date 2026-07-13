@@ -19,6 +19,12 @@ def extract_and_store_features(input_file_path="all_data.pkl",
     # Select date range to work on 
     # all_data = all_data.loc["2024-08-01":"2024-08-28 23:59:59"]
 
+    # View different timesteps included in data
+    # time_diffs = all_data.index.to_series().diff()
+    # print(time_diffs.head())
+    # print(time_diffs.value_counts())
+
+
     # Get names of columns containing MFC voltage data
     mfc_column_names = extract_mfc_column_names(all_data)
 
@@ -53,7 +59,9 @@ def extract_and_store_features(input_file_path="all_data.pkl",
     # cod_events_dates = []
     # cod_events_idx = []
 
-    # Iterate over MFCs 
+    # window_size_max = 0
+
+    # Iterate over all MFCs 
     for mfc in all_mfc_data_separate:
         print()
         print(mfc)
@@ -73,15 +81,6 @@ def extract_and_store_features(input_file_path="all_data.pkl",
         # Get date-time index of COD events 
         cod_events_idx = data.index[data["COD_event"] == 1]
         mfc_features["COD date time index"][mfc] = cod_events_idx
-        # print(cod_events_idx)
-
-        # # # Store the date of each COD event for the first MFC in the data set to use later as an index for all MFCs
-        # if len(cod_events_dates) == 0:
-        #     cod_events_dates = cod_events_idx.strftime('%Y-%m-%d').tolist()
-        #     print(cod_events_dates)
-        #     # Save list of COD event date-time indexes 
-        #     with open("COD_event_dates.pkl", "wb") as f:
-        #         pickle.dump(cod_events_dates, f)
 
         # Store COD values
         mfc_features["COD"][mfc] = list(data.loc[cod_events_idx, "COD"])
@@ -107,11 +106,22 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             # Get the window of voltage data
             V_window = window['Voltage mV']
 
+            # # Update maximum window size
+            # window_size = len(V_window)
+            # # print(window_size)
+            # if window_size > window_size_max:
+            #     window_size_max = window_size
+
+            # time_difference = end - start
+            # print(time_difference)
+
             # If there is data in the window
             if V_window.notna().any():
 
                 # -------- Index of the max voltage value --------
                 peak_idx = V_window.idxmax()
+                # print('peak', peak_idx-start)
+                # print()
  
                 # -------- Rise time (time from COD event to voltage peak) --------
                 rise_time = (peak_idx - start).total_seconds() / (60 * 60 * 24)
@@ -164,12 +174,11 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             mfc_features["Rise time (days)"][mfc].append(round(rise_time, 6))
             mfc_features["Decay slope (V per s)"][mfc].append(round(decay_slope, 6))
 
-            
             # -------- Energy generated per COD event ---------
             # Time axis of the window is every value minus the start value, expressed in seconds
             t = (window.index - window.index[0]).total_seconds()
 
-            # Get the power values in the window
+            # Get the series of power values in the window
             power = window['Power W'].values
 
             # Replace any nan power values with 0
@@ -192,7 +201,29 @@ def extract_and_store_features(input_file_path="all_data.pkl",
                   show_days=False,
                   show_plot=False
                   )
+        
+    # print('Window size max', window_size_max)
 
+    # Pad all time series windows with zero to equal length of largest window 
+    # for time_series_feature in ['Vwindow mV', 'Pwindow W']:
+    #     for mfc, data in mfc_features[time_series_feature].items():
+    #         for i, sample in enumerate(data):
+    #             current_length = len(sample)
+    #             # print(current_length)
+    #             if current_length < window_size_max:
+    #                 padding = [0] * (window_size_max - current_length)
+    #                 data[i] = sample + padding
+
+    # Verify padding worked
+    # for mfc, data in mfc_features['Vwindow mV'].items():
+    #     for i, sample in enumerate(data):
+    #         current_length = len(sample)
+    #         print(current_length)
+    # for mfc, data in mfc_features['Pwindow W'].items():
+    #     for i, sample in enumerate(data):
+    #         current_length = len(sample)
+    #         print(current_length)
+    
 
     # Save nested dictionary of {features : {mfc names : mfc data}} to pickle file
     with open(output_file_name+".pkl", 'wb') as f:
