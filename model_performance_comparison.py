@@ -131,12 +131,12 @@ def evaluate_model_performance(X, y, results, configuration,
 
 
 # MFC types
-mfc_types_all = [
-                        r"10\*10\s*AC",     # Carbon veil + activated carbon
-                        r"20\*30\s*AC",
-                        r"10\*10(?!\s*AC)", # Carbon veil
-                        r"20\*30(?!\s*AC)"
-                        ]
+# mfc_types_all = [
+#                         r"10\*10\s*AC",     # Carbon veil + activated carbon
+#                         r"20\*30\s*AC",
+#                         r"10\*10(?!\s*AC)", # Carbon veil
+#                         r"20\*30(?!\s*AC)"
+#                         ]
 
 mfc_types_regex_mappings = {
         r"10\*10\s*AC": "10x10_AC",
@@ -146,10 +146,10 @@ mfc_types_regex_mappings = {
     }
 
 # Resistance values to include in data
-resistances_all = [0.1, 1, 3]
+# resistances_all = [0.1, 1, 3]
 
 # Years to include in data
-years_all = [2024, 2025]
+# years_all = [2024, 2025]
 
 # Variables to store analysis of data combinations that give best results
 best_r2 = -float("inf")
@@ -165,7 +165,7 @@ first_feature = next(iter(mfc_features))
 mfc_names = mfc_features[first_feature].keys()
 
 
-def compare_input_data_performance():
+def compare_input_data_performance(features, mfc_types_all, resistances_all, years_all):
 
     # Try all possble combinations of MFCs, resistance values and year section of data (2024/2025)
     for subset_mfc_types, subset_resistances, subset_years in itertools.product( all_subsets(mfc_types_all),
@@ -206,14 +206,14 @@ def compare_input_data_performance():
         # print(len(model_data['COD']))
             # print(subset_mfc_types, subset_resistances, subset_years)
 
-            features=[
-                    # 'Vpeak mV', 
-                    #   'Ppeak W', 
-                      'Energy J', 
-                    #   'Resistance kOhms', 
-                    #   'Vfinal mV', 
-                    #   'Pfinal W'
-                    ]
+            # features=[
+            #         # 'Vpeak mV', 
+            #         #   'Ppeak W', 
+            #           'Energy J', 
+            #         #   'Resistance kOhms', 
+            #         #   'Vfinal mV', 
+            #         #   'Pfinal W'
+            #         ]
 
             y, X = prepare_model_data(model_data, 
                                       labels=['COD'],
@@ -239,29 +239,54 @@ def compare_input_data_performance():
     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
     # Get top 5
-    top_5 = results_sorted[:5]
+    top_3 = results_sorted[:3]
 
-    print("\nTop 5 configurations:\n")
+    best_config = results_sorted[0]
 
-    for i, res in enumerate(top_5, 1):
-        print(f"--- Rank {i} ---")
-        print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-        # print("MFC types:", res["mfc_types"])
-        print("Resistances kOhm:", res["resistances"])
-        print("Years:", res["years"])
-        print("R²:", round(res["r2"], 4))
-        print("MSE:", round(res["mse"], 2))
-        print("Alpha:", res["alpha"]),
-        # print("N Samples:", res["n_samples"])
-        # print("Terms:", "v_peak, p_peak, energy, resistance")
-        print("Terms:", features)
-        print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-        print("Intercept:", res["intercept"])
-        print()
+    # print("Best", best_config)
+
+    # print("\nTop 3 configurations:\n")
+
+    # for i, res in enumerate(top_3, 1):
+    #     print(f"--- Rank {i} ---")
+    #     print()
+    #     print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+    #     # print("MFC types:", res["mfc_types"])
+    #     print("Resistances kOhm:", res["resistances"])
+    #     print("Years:", res["years"])
+    #     print("R²:", round(res["r2"], 4))
+    #     print("MSE:", round(res["mse"], 2))
+    #     print("Alpha:", res["alpha"]),
+    #     # print("N Samples:", res["n_samples"])
+    #     # print("Terms:", "v_peak, p_peak, energy, resistance")
+    #     print("Terms:", features)
+    #     print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+    #     print("Intercept:", res["intercept"])
+    #     print()
+
+    return best_config
+
 
 
 if __name__ == '__main__':
-    compare_input_data_performance()
+    compare_input_data_performance(
+        features=[
+            'Vpeak mV', 
+            'Ppeak W', 
+            'Energy J', 
+            'Resistance kOhms', 
+            'Vfinal mV', 
+            'Pfinal W'
+            ],
+        mfc_types_all = [
+            r"10\*10\s*AC",     # Carbon veil + activated carbon
+            r"20\*30\s*AC",
+            r"10\*10(?!\s*AC)", # Carbon veil
+            r"20\*30(?!\s*AC)"
+            ],
+        resistances_all = [0.1, 1, 3],
+        years_all = [2024, 2025]
+    )
 
 
 
