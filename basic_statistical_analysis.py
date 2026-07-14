@@ -10,12 +10,12 @@ patterns = {
         "20x30": r"20\*30(?!\s*AC)"    # match 20*30 NOT followed by AC
     }
 
-def analyse_basic_statistics(file_path="mfc_analysis.xlsx"):
+def analyse_basic_statistics(file_path="mfc_features.xlsx"):
 
     # Read all sheets into a dict of DataFrames
-    mfc_analysis = pd.read_excel(file_path, sheet_name=None)
+    mfc_features = pd.read_excel(file_path, sheet_name=None)
 
-    print(mfc_analysis.keys())  # sheet names
+    print(mfc_features.keys())  # sheet names
 
     # ---------------------------------------------------------------
     # -------- Statistical analysis of MFCs grouped by type ---------
@@ -40,7 +40,7 @@ def analyse_basic_statistics(file_path="mfc_analysis.xlsx"):
         for mfc_type, pattern in patterns.items():
 
             # Select only columns that match the heading name pettern
-            cols = mfc_analysis[parameter].filter(regex=pattern)   
+            cols = mfc_features[parameter].filter(regex=pattern)   
 
             # Compute the COD event-wise (i.e. row-wise) min, max, mean
             summary[mfc_type] = {
@@ -80,9 +80,9 @@ def analyse_basic_statistics(file_path="mfc_analysis.xlsx"):
 
     for parameter in ["Vpeak mV", "Ppeak W", "Energy J"]:
 
-        df_param = mfc_analysis[parameter]
-        df_cod = mfc_analysis["COD"]
-        df_res = mfc_analysis["Resistance kOhms"]
+        df_param = mfc_features[parameter]
+        df_cod = mfc_features["COD"]
+        df_res = mfc_features["Resistance kOhms"]
 
         for mfc_type, pattern in patterns.items():
 

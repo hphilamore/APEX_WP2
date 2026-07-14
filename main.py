@@ -1,7 +1,7 @@
 from read_excel_data import *
 from extract_features import *
 from basic_statistical_analysis import *
-from ridge_regression_model import *
+from model_performance_comparison import *
 
 def main():
 
@@ -16,6 +16,8 @@ def main():
 
     # Build a ridge regression model using the fetaures and test which combinations of input data give the best performance
     build_and_evaluate_ridge()
+
+
 
     
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ def prepare_model_data(model_data, labels, features):
 
 
 def evaluate_model_performance(X, y, results, configuration, 
-                               model_class, test_size, 
+                               model_class, features, test_size, 
                                min_data_points):
 
     # Drop any configurations with less than minimum threshold
@@ -132,10 +132,10 @@ def evaluate_model_performance(X, y, results, configuration,
 
 # MFC types
 mfc_types_all = [
-                        # r"10\*10\s*AC",     # Carbon veil + activated carbon
-                        # r"20\*30\s*AC",
+                        r"10\*10\s*AC",     # Carbon veil + activated carbon
+                        r"20\*30\s*AC",
                         r"10\*10(?!\s*AC)", # Carbon veil
-                        # r"20\*30(?!\s*AC)"
+                        r"20\*30(?!\s*AC)"
                         ]
 
 mfc_types_regex_mappings = {
@@ -206,13 +206,26 @@ def compare_input_data_performance():
         # print(len(model_data['COD']))
             # print(subset_mfc_types, subset_resistances, subset_years)
 
+            features=['Vpeak mV', 'Ppeak W', 
+                      'Energy J', 'Resistance kOhms', 
+                      'Vfinal mV', 'Pfinal W'
+                    ]
+
             y, X = prepare_model_data(model_data, 
-                                    labels=['COD'],
-                                    features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms'])        
+                                      labels=['COD'],
+                                    #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
+                                    #   features=['Vpeak mV', 'Ppeak W', 
+                                    #             'Energy J', 'Resistance kOhms', 
+                                    #             'Window length (hours)',
+                                    #             'Vfinal mV', 'Pfinal W'
+                                    #             ]
+                                    features=features
+                                      )        
 
             evaluate_model_performance(X, y, results, configuration, 
                                     # model=Ridge(alpha=1.0), 
                                     model_class=Ridge, 
+                                    features=features,
                                     test_size=0.2, 
                                     min_data_points=25)
         else:
@@ -236,7 +249,8 @@ def compare_input_data_performance():
         print("MSE:", round(res["mse"], 2))
         print("Alpha:", res["alpha"]),
         # print("N Samples:", res["n_samples"])
-        print("Terms:", "v_peak, p_peak, energy, resistance")
+        # print("Terms:", "v_peak, p_peak, energy, resistance")
+        print("Terms:", features)
         print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
         print("Intercept:", res["intercept"])
         print()
