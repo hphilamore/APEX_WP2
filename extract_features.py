@@ -125,7 +125,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 
             # Select window of data
             window = data.loc[mask]
-            print('Window length', len(window))
+            # print('Window length', len(window))
 
             # Get the window of voltage and power data
             V_window = window['Voltage mV']
@@ -147,7 +147,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
                 # -------- Max voltage value --------
                 peak_idx = V_window.idxmax()
                 V_peak = V_window.loc[peak_idx]
-                print(V_peak)
+                # print(V_peak)
                 
                 # -------- Power at the max voltage value (i.e. max power becuase R is constant) --------        
                 P_peak = P_window.loc[peak_idx]

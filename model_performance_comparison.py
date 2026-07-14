@@ -206,9 +206,13 @@ def compare_input_data_performance():
         # print(len(model_data['COD']))
             # print(subset_mfc_types, subset_resistances, subset_years)
 
-            features=['Vpeak mV', 'Ppeak W', 
-                      'Energy J', 'Resistance kOhms', 
-                      'Vfinal mV', 'Pfinal W'
+            features=[
+                    # 'Vpeak mV', 
+                    #   'Ppeak W', 
+                      'Energy J', 
+                    #   'Resistance kOhms', 
+                    #   'Vfinal mV', 
+                    #   'Pfinal W'
                     ]
 
             y, X = prepare_model_data(model_data, 
