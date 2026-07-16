@@ -63,13 +63,14 @@ def prepare_model_data(model_data, labels, features):
 
 def evaluate_model_performance(X, y, results, configuration, 
                                model_class, features, test_size, 
-                               min_data_points):
+                               min_data_points, verbose=True):
 
     # Drop any configurations with less than minimum threshold
     if len(y) < min_data_points:
-        print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
-            configuration['subset_resistances'],
-            configuration['subset_years'])
+        if verbose==True:
+            print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
+                configuration['subset_resistances'],
+                configuration['subset_years'])
         return
 
     # Split into training and testing sets
@@ -122,9 +123,10 @@ def evaluate_model_performance(X, y, results, configuration,
     # Sort results by R² descending
     scores_sorted = sorted(scores, key=lambda x: x["r2"], reverse=True)
 
-    print('Keep config', configuration['subset_mfc_types'],
-            configuration['subset_resistances'],
-            configuration['subset_years'])
+    if verbose==True:
+        print('Keep config', configuration['subset_mfc_types'],
+                configuration['subset_resistances'],
+                configuration['subset_years'])
     
     # Store the best value for this configuration with hyperparameter tuning 
     results.append(scores_sorted[0])
@@ -156,16 +158,28 @@ best_r2 = -float("inf")
 best_config = None
 results = []
 
-# Get stored feature data
-with open('mfc_features.pkl', 'rb') as f:
-    mfc_features = pickle.load(f)
+# # Get stored feature data
+# with open('mfc_features.pkl', 'rb') as f:
+#     mfc_features = pickle.load(f)
 
-# Get the column / mfc names from the first dictionary in the nested dictionary of fetaures
-first_feature = next(iter(mfc_features))
-mfc_names = mfc_features[first_feature].keys()
+# # Get the column / mfc names from the first dictionary in the nested dictionary of fetaures
+# first_feature = next(iter(mfc_features))
+# mfc_names = mfc_features[first_feature].keys()
 
 
-def compare_input_data_performance(features, mfc_types_all, resistances_all, years_all):
+def compare_input_data_performance(features, 
+                                   mfc_types_all, 
+                                   resistances_all, 
+                                   years_all,
+                                   verbose=True):
+    
+    # Get stored feature data
+    with open('mfc_features.pkl', 'rb') as f:
+        mfc_features = pickle.load(f)
+
+    # Get the column / mfc names from the first dictionary in the nested dictionary of fetaures
+    first_feature = next(iter(mfc_features))
+    mfc_names = mfc_features[first_feature].keys()
 
     # Try all possble combinations of MFCs, resistance values and year section of data (2024/2025)
     for subset_mfc_types, subset_resistances, subset_years in itertools.product( all_subsets(mfc_types_all),
@@ -231,9 +245,11 @@ def compare_input_data_performance(features, mfc_types_all, resistances_all, yea
                                     model_class=Ridge, 
                                     features=features,
                                     test_size=0.2, 
-                                    min_data_points=25)
+                                    min_data_points=25,
+                                    verbose=verbose)
         else:
-            print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
+            if verbose==True:
+                print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
 
     # Sort results by R² descending
     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
@@ -245,24 +261,24 @@ def compare_input_data_performance(features, mfc_types_all, resistances_all, yea
 
     # print("Best", best_config)
 
-    # print("\nTop 3 configurations:\n")
-
-    # for i, res in enumerate(top_3, 1):
-    #     print(f"--- Rank {i} ---")
-    #     print()
-    #     print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-    #     # print("MFC types:", res["mfc_types"])
-    #     print("Resistances kOhm:", res["resistances"])
-    #     print("Years:", res["years"])
-    #     print("R²:", round(res["r2"], 4))
-    #     print("MSE:", round(res["mse"], 2))
-    #     print("Alpha:", res["alpha"]),
-    #     # print("N Samples:", res["n_samples"])
-    #     # print("Terms:", "v_peak, p_peak, energy, resistance")
-    #     print("Terms:", features)
-    #     print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-    #     print("Intercept:", res["intercept"])
-    #     print()
+    if verbose == True:
+        print("\nTop 3 configurations:\n")
+        for i, res in enumerate(top_3, 1):
+            print(f"--- Rank {i} ---")
+            print()
+            print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+            # print("MFC types:", res["mfc_types"])
+            print("Resistances kOhm:", res["resistances"])
+            print("Years:", res["years"])
+            print("R²:", round(res["r2"], 4))
+            print("MSE:", round(res["mse"], 2))
+            print("Alpha:", res["alpha"]),
+            # print("N Samples:", res["n_samples"])
+            # print("Terms:", "v_peak, p_peak, energy, resistance")
+            print("Terms:", features)
+            print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+            print("Intercept:", res["intercept"])
+            print()
 
     return best_config
 

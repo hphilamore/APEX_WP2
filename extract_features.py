@@ -10,7 +10,7 @@ feature_data_file_name = "mfc_features"
 def extract_and_store_features(input_file_path="all_data.pkl", 
                                output_file_name=feature_data_file_name,
                                window_length_hours = 0):
-
+    
     # Load stored data
     all_data = pd.read_pickle(input_file_path)
 
@@ -53,7 +53,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
         "Vfinal mV": {}, 
         "Pfinal W": {}, 
         "Rise time (days)" : {},
-        "Decay slope (V per s)" : {},
+        # "Decay slope (V per s)" : {},
         "Energy J": {},
         "Vwindow mV": {},
         "Pwindow W": {},
@@ -154,9 +154,11 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 
                 # -------- Final voltage value --------
                 V_final = V_window.iloc[-1]
+                print(V_final)
 
                 # -------- Final power value --------
                 P_final = P_window.iloc[-1]
+                print(P_final)
 
                 # -------- Rise time (time from COD event to voltage peak) --------
                 rise_time = (peak_idx - start).total_seconds() / (60 * 60 * 24)  
@@ -179,7 +181,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
                 # print(dt)
 
                 # Compute the slope of voltage decay w.r.t time 
-                decay_slope = (V_window.loc[t_end] - V_peak) / dt
+                # decay_slope = (V_window.loc[t_end] - V_peak) / dt
                 # print(V_window.loc[t_end])
                 # print(decay_slope)
                 # print()
@@ -191,7 +193,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
                 V_final = None
                 P_final = None
                 rise_time = np.nan
-                decay_slope = np.nan
+                # decay_slope = np.nan
 
             # Store features for this data window
             voltage_peaks_idx.append(peak_idx)
@@ -203,7 +205,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             mfc_features["Vfinal mV"][mfc].append(V_final)
             mfc_features["Pfinal W"][mfc].append(P_final)
             mfc_features["Rise time (days)"][mfc].append(round(rise_time, 6))
-            mfc_features["Decay slope (V per s)"][mfc].append(round(decay_slope, 6))
+            # mfc_features["Decay slope (V per s)"][mfc].append(round(decay_slope, 6))
 
             # -------- Energy generated per COD event ---------
             # Time axis of the window is every value minus the start value, expressed in seconds
@@ -302,6 +304,6 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 if __name__ == "__main__":
     extract_and_store_features(input_file_path="all_data.pkl",
                                output_file_name=feature_data_file_name,
-                               window_length_hours=12
+                               window_length_hours=1/12
                                )
 
