@@ -154,9 +154,9 @@ mfc_types_regex_mappings = {
 # years_all = [2024, 2025]
 
 # Variables to store analysis of data combinations that give best results
-best_r2 = -float("inf")
-best_config = None
-results = []
+# best_r2 = -float("inf")
+# best_config = None
+# results = []
 
 # # Get stored feature data
 # with open('mfc_features.pkl', 'rb') as f:
@@ -172,6 +172,11 @@ def compare_input_data_performance(features,
                                    resistances_all, 
                                    years_all,
                                    verbose=True):
+    
+    # Variables to store analysis of data combinations that give best results
+    best_r2 = -float("inf")
+    best_config = None
+    results = []
     
     # Get stored feature data
     with open('mfc_features.pkl', 'rb') as f:
@@ -291,8 +296,8 @@ if __name__ == '__main__':
             'Ppeak W', 
             'Energy J', 
             'Resistance kOhms', 
-            'Vfinal mV', 
-            'Pfinal W'
+            # 'Vfinal mV', 
+            # 'Pfinal W'
             ],
         mfc_types_all = [
             r"10\*10\s*AC",     # Carbon veil + activated carbon

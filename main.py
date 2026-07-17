@@ -25,8 +25,8 @@ def main():
                     'Ppeak W', 
                     'Energy J', 
                     'Resistance kOhms', 
-                    'Vfinal mV', 
-                    'Pfinal W'
+                    # 'Vfinal mV', 
+                    # 'Pfinal W'
                     ],
 
 
@@ -34,8 +34,9 @@ def main():
 
     for features in feature_sets:
 
-        window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5, 12, 18]
-        window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3]
+        window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
+        # window_lengths = [1/3, 1/2, 1, 2, 3]
+        # window_lengths = [1/3, 1/2, 1]
         r2s = []
 
         cmap = plt.get_cmap('viridis')
@@ -109,21 +110,31 @@ def main():
                 f"{c:.3f}*{f}"
                 for c, f in zip(best_config["coefficients"], features)
                 ) +
-            f" + {best_config['intercept'][0]}" 
+            f" + {best_config['intercept'][0]:.3f}" +
+            f", R2={best_config['r2']:.3f}"
             )
 
             colour = cmap(i / (n - 1))
 
-            plt.scatter(window_length, best_config["r2"], label=equation_string, color=colour)
+            plt.scatter(window_length, best_config["r2"], 
+                        # label=equation_string, 
+                        color=colour
+                        )
         
         feature_string = (", ".join(features))
         plt.plot(window_lengths, r2s, label=feature_string)
-        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1))
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2))
         plt.subplots_adjust(bottom=0.4)
         plt.xlabel("Time (hours)")
         plt.ylabel("R2 (best configuration)")
-        plt.savefig(f"{feature_string}.png")
-        plt.show()
+        plt.title(feature_string)
+        # plt.savefig(f"figs/Ridge-R2-{feature_string}.png", bbox_inches="tight")
+        # # plt.show()
+        # plt.close()
+    
+    plt.savefig(f"figs/all_v2_Ridge-R2.png", bbox_inches="tight")
+    # plt.show()
+    plt.close()
 
 if __name__ == "__main__":
     main()

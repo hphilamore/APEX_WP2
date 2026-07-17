@@ -154,11 +154,11 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 
                 # -------- Final voltage value --------
                 V_final = V_window.iloc[-1]
-                print(V_final)
+                # print(V_final)
 
                 # -------- Final power value --------
                 P_final = P_window.iloc[-1]
-                print(P_final)
+                # print(P_final)
 
                 # -------- Rise time (time from COD event to voltage peak) --------
                 rise_time = (peak_idx - start).total_seconds() / (60 * 60 * 24)  
@@ -304,6 +304,6 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 if __name__ == "__main__":
     extract_and_store_features(input_file_path="all_data.pkl",
                                output_file_name=feature_data_file_name,
-                               window_length_hours=1/12
+                               window_length_hours=1
                                )
 
