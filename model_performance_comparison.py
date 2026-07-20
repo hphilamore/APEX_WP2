@@ -11,6 +11,7 @@ from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
+from xgboost import XGBRegressor
 import pickle
 
 mfc_types_regex_mappings = {
@@ -63,14 +64,6 @@ def prepare_model_data(model_data, labels, features, test_size):
 
     X = df[features].to_numpy()
 
-    # # Drop any configurations with less than minimum threshold
-    # if len(y) < min_data_points:
-    #     if verbose==True:
-    #         print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
-    #             configuration['subset_resistances'],
-    #             configuration['subset_years'])
-    #     continue
-
     # Split into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=42
@@ -79,69 +72,100 @@ def prepare_model_data(model_data, labels, features, test_size):
     return X_train, X_test, y_train, y_test 
 
 
-def evaluate_model_performance(X_train, X_test, y_train, y_test, results, configuration, 
-                               model_class, features, 
-                               #test_size, 
-                            #    min_data_points, 
-                            verbose=True):
-
-    # # Drop any configurations with less than minimum threshold
-    # if len(y) < min_data_points:
-    #     if verbose==True:
-    #         print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
-    #             configuration['subset_resistances'],
-    #             configuration['subset_years'])
-    #     return
-
-    # # Split into training and testing sets
-    # X_train, X_test, y_train, y_test = train_test_split(
-    #     X, y, test_size=test_size, random_state=42
-    # )
+def evaluate_model_performance(X_train, 
+                               X_test, 
+                               y_train, 
+                               y_test, 
+                               configuration, 
+                               results,
+                               model_class, 
+                               param_grid,
+                               features,  
+                               scale_features=False, 
+                               verbose=True):
+    
 
     # Scale all features to mean 0, std 1, to retain feature importance 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    if scale_features:
+        scaler = StandardScaler()
+        X_train_model = scaler.fit_transform(X_train)
+        X_test_model = scaler.transform(X_test)
+    else:
+        scaler = None
+        X_train_model = X_train
+        X_test_model = X_test
 
-    # Store scores to compare performance using different values of alpha
-    scores = []
+    # Store scores to compare performance using different hyperparameter combinations 
+    param_gridsearch_results = []
 
-    alphas = np.logspace(-4, 4, 100)
+    # alphas = np.logspace(-4, 4, 100)
 
     # Hyperparameter sweep to tune alpha for current configuration 
-    for alpha in alphas:
+    # for alpha in alphas:
+    for params in param_grid:
 
         # model = model_class(alpha=1.0)
-        model = model_class(alpha=alpha)
+        # model = model_class(alpha=alpha)
+        model = model_class(**params)
 
         # Train the model
         # model.fit(X_train, y_train)
-        model.fit(X_train_scaled, y_train)
+        model.fit(X_train_model, y_train)
 
         # Make predictions
         # y_pred = model.predict(X_test)
-        y_pred = model.predict(X_test_scaled)
+        y_pred = model.predict(X_test_model)
 
         # Evaluate
         mse = mean_squared_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
 
-        # Store result
-        scores.append({
+        # Store result for current hyperparameter combination 
+        param_result = {
             "mfc_types": configuration['subset_mfc_types'],
             "resistances": configuration['subset_resistances'],
             "years": configuration['subset_years'],
             "r2": r2,
             "mse": mse,
-            "alpha": alpha,
-            "coefficients": model.coef_.copy(),
-            "intercept": model.intercept_,
-            "feature_scales": scaler.scale_.copy(),
+            "parameters": params,
+            # "alpha": alpha,
+            # "coefficients": model.coef_.copy(),
+            # "intercept": model.intercept_,
+            # "feature_scales": scaler.scale_.copy(),
             "n_samples": len(y_train) + len(y_pred)
-            })
+            }
+        
+        # Store model-specific information
+        if hasattr(model, "coef_"):
+            param_result["coefficients"] = model.coef_.copy()
+            param_result["intercept"] = model.intercept_
+
+        if hasattr(model, "feature_importances_"):
+            param_result["feature_importances"] = model.feature_importances_
+
+        if scaler is not None:
+            param_result["feature_scales"] = scaler.scale_
+        
+
+        
+        # scores.append({
+        #     "mfc_types": configuration['subset_mfc_types'],
+        #     "resistances": configuration['subset_resistances'],
+        #     "years": configuration['subset_years'],
+        #     "r2": r2,
+        #     "mse": mse,
+        #     "alpha": alpha,
+        #     "coefficients": model.coef_.copy(),
+        #     "intercept": model.intercept_,
+        #     "feature_scales": scaler.scale_.copy(),
+        #     "n_samples": len(y_train) + len(y_pred)
+        #     })
+        
+        param_gridsearch_results.append(param_result)
+
         
     # Sort results by R² descending
-    scores_sorted = sorted(scores, key=lambda x: x["r2"], reverse=True)
+    param_gridsearch_sorted = sorted(param_gridsearch_results, key=lambda x: x["r2"], reverse=True)
 
     if verbose==True:
         print('Keep config', configuration['subset_mfc_types'],
@@ -149,7 +173,7 @@ def evaluate_model_performance(X_train, X_test, y_train, y_test, results, config
                 configuration['subset_years'])
     
     # Store the best value for this configuration with hyperparameter tuning 
-    results.append(scores_sorted[0])
+    results.append(param_gridsearch_sorted[0])
 
 
 
@@ -164,10 +188,9 @@ def compare_input_data_configurations(features,
                                    min_data_points=25,
                                    verbose=True):
     
-    # Variables to store analysis of data combinations that give best results
-    best_r2 = -float("inf")
-    best_config = None
-    results = []
+    # Variables to store results of data combinations that give best performance 
+    results_ridge = []
+    results_xgboost = []
     
     # Get stored feature data
     with open('mfc_features.pkl', 'rb') as f:
@@ -213,39 +236,6 @@ def compare_input_data_configurations(features,
                             skip_configuration = True
 
         if skip_configuration == False:
-        # print(len(model_data['COD']))
-            # print(subset_mfc_types, subset_resistances, subset_years)
-
-            # features=[
-            #         # 'Vpeak mV', 
-            #         #   'Ppeak W', 
-            #           'Energy J', 
-            #         #   'Resistance kOhms', 
-            #         #   'Vfinal mV', 
-            #         #   'Pfinal W'
-            #         ]
-
-            # y, X = prepare_model_data(model_data, 
-            #                           labels=['COD'],
-            #                         #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
-            #                         #   features=['Vpeak mV', 'Ppeak W', 
-            #                         #             'Energy J', 'Resistance kOhms', 
-            #                         #             'Window length (hours)',
-            #                         #             'Vfinal mV', 'Pfinal W'
-            #                         #             ]
-            #                         features=features
-            #                           ) 
-
-            # y, X = prepare_model_data(configuration_data, 
-            #                 labels=['COD'],
-            #             #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
-            #             #   features=['Vpeak mV', 'Ppeak W', 
-            #             #             'Energy J', 'Resistance kOhms', 
-            #             #             'Window length (hours)',
-            #             #             'Vfinal mV', 'Pfinal W'
-            #             #             ]
-            #             features=features
-            #         ) 
 
             # Drop any configurations with less than minimum threshold
             if len(configuration_data[labels[0]]) < min_data_points:
@@ -258,64 +248,107 @@ def compare_input_data_configurations(features,
             X_train, X_test, y_train, y_test = prepare_model_data(
                         configuration_data, 
                         labels=['COD'],
-                        #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
-                        #   features=['Vpeak mV', 'Ppeak W', 
-                        #             'Energy J', 'Resistance kOhms', 
-                        #             'Window length (hours)',
-                        #             'Vfinal mV', 'Pfinal W'
-                        #             ]
                         features=features,
                         test_size=0.2
                     ) 
+            
+            # --------------------------------------
+            # ----- Evauluate ridge regression -----
+            # --------------------------------------
+            # ridge_params = [
+            #     {"alpha": a}
+            #     for a in np.logspace(-4,4,100)
+            # ]
+       
+            # evaluate_model_performance(X_train, 
+            #                            X_test, 
+            #                            y_train, 
+            #                            y_test, 
+            #                            configuration, 
+            #                             results=results_ridge, 
+            #                             model_class=Ridge, 
+            #                             features=features,
+            #                             param_grid=ridge_params,
+            #                             scale_features=True,
+            #                             verbose=verbose)
+            
+            # --------------------------------------
+            # ----- Evauluate XGBoost -----
+            # --------------------------------------
+            
+            xgb_params = []
 
+            # for n_estimators in [100,300,500]:
+            #     for max_depth in [2,3,5]:
+            #         for learning_rate in [0.01,0.05,0.1]:
 
+            for n_estimators in [100]:
+                for max_depth in [2]:
+                    for learning_rate in [0.01]:
 
-            # # Split into training and testing sets
-            # X_train, X_test, y_train, y_test = train_test_split(
-            #     X, y, test_size=test_size, random_state=42
-            # )       
-
-            evaluate_model_performance(X_train, X_test, y_train, y_test, results, configuration, 
-                                    # model=Ridge(alpha=1.0), 
-                                    model_class=Ridge, 
+                        xgb_params.append({
+                            "n_estimators": n_estimators,
+                            "max_depth": max_depth,
+                            "learning_rate": learning_rate,
+                            "random_state":42
+                        })
+            
+       
+            evaluate_model_performance(
+                                    X_train,
+                                    X_test,
+                                    y_train,
+                                    y_test,
+                                    configuration,
+                                    results=results_xgboost,
+                                    model_class=XGBRegressor,
+                                    param_grid=xgb_params,
                                     features=features,
-                                    # test_size=0.2, 
-                                    # min_data_points=25,
-                                    verbose=verbose)
+                                    scale_features=False
+                                )
+            
         else:
             if verbose==True:
                 print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
 
-    # Sort results by R² descending
-    results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-    # Get top 5
-    top_3 = results_sorted[:3]
 
-    best_config = results_sorted[0]
+    best_configs = []
 
-    # print("Best", best_config)
+    for results in [results_ridge, results_xgboost]:
 
-    if verbose == True:
-        print("\nTop 3 configurations:\n")
-        for i, res in enumerate(top_3, 1):
-            print(f"--- Rank {i} ---")
-            print()
-            print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-            # print("MFC types:", res["mfc_types"])
-            print("Resistances kOhm:", res["resistances"])
-            print("Years:", res["years"])
-            print("R²:", round(res["r2"], 4))
-            print("MSE:", round(res["mse"], 2))
-            print("Alpha:", res["alpha"]),
-            # print("N Samples:", res["n_samples"])
-            # print("Terms:", "v_peak, p_peak, energy, resistance")
-            print("Terms:", features)
-            print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-            print("Intercept:", res["intercept"])
-            print()
+        # Sort results by R² descending
+        results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-    return best_config
+        # Get top 5
+        top_3 = results_sorted[:3]
+
+        # best_config = results_sorted[0]
+        best_configs.append(results_sorted[0])
+
+        # print("Best", best_config)
+
+        if verbose == True:
+            print("\nTop 3 configurations:\n")
+            for i, res in enumerate(top_3, 1):
+                print(f"--- Rank {i} ---")
+                print()
+                print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+                # print("MFC types:", res["mfc_types"])
+                print("Resistances kOhm:", res["resistances"])
+                print("Years:", res["years"])
+                print("R²:", round(res["r2"], 4))
+                print("MSE:", round(res["mse"], 2))
+                # print("Alpha:", res["alpha"]),
+                print("Model Parameters:", (f"{k}: {float(round(v, 3))}, " for k, v in res["parameters"].items())),
+                # print("N Samples:", res["n_samples"])
+                # print("Terms:", "v_peak, p_peak, energy, resistance")
+                print("Terms:", features)
+                print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+                print("Intercept:", res["intercept"])
+                print()
+
+    return best_configs
 
 
 
