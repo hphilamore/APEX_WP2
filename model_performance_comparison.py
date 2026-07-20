@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import cross_val_score
 from xgboost import XGBRegressor
 import pickle
@@ -98,14 +99,9 @@ def evaluate_model_performance(X_train,
     # Store scores to compare performance using different hyperparameter combinations 
     param_gridsearch_results = []
 
-    # alphas = np.logspace(-4, 4, 100)
-
-    # Hyperparameter sweep to tune alpha for current configuration 
-    # for alpha in alphas:
+    # Tune hyperparameters for current configuration using grid search
     for params in param_grid:
 
-        # model = model_class(alpha=1.0)
-        # model = model_class(alpha=alpha)
         model = model_class(**params)
 
         # Train the model
@@ -119,6 +115,7 @@ def evaluate_model_performance(X_train,
         # Evaluate
         mse = mean_squared_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred)
 
         # Store result for current hyperparameter combination 
         param_result = {
@@ -127,6 +124,8 @@ def evaluate_model_performance(X_train,
             "years": configuration['subset_years'],
             "r2": r2,
             "mse": mse,
+            "mae": mae,
+            "model": model.__class__.__name__,
             "parameters": params,
             # "alpha": alpha,
             # "coefficients": model.coef_.copy(),
@@ -145,21 +144,6 @@ def evaluate_model_performance(X_train,
 
         if scaler is not None:
             param_result["feature_scales"] = scaler.scale_
-        
-
-        
-        # scores.append({
-        #     "mfc_types": configuration['subset_mfc_types'],
-        #     "resistances": configuration['subset_resistances'],
-        #     "years": configuration['subset_years'],
-        #     "r2": r2,
-        #     "mse": mse,
-        #     "alpha": alpha,
-        #     "coefficients": model.coef_.copy(),
-        #     "intercept": model.intercept_,
-        #     "feature_scales": scaler.scale_.copy(),
-        #     "n_samples": len(y_train) + len(y_pred)
-        #     })
         
         param_gridsearch_results.append(param_result)
 
@@ -252,25 +236,25 @@ def compare_input_data_configurations(features,
                         test_size=0.2
                     ) 
             
-            # # --------------------------------------
-            # # ----- Evauluate ridge regression -----
-            # # --------------------------------------
-            # ridge_params = [
-            #     {"alpha": a}
-            #     for a in np.logspace(-4,4,100)
-            # ]
+            # --------------------------------------
+            # ----- Evauluate ridge regression -----
+            # --------------------------------------
+            ridge_params = [
+                {"alpha": a}
+                for a in np.logspace(-4,4,100)
+            ]
        
-            # evaluate_model_performance(X_train, 
-            #                            X_test, 
-            #                            y_train, 
-            #                            y_test, 
-            #                            configuration, 
-            #                             results=results_ridge, 
-            #                             model_class=Ridge, 
-            #                             features=features,
-            #                             param_grid=ridge_params,
-            #                             scale_features=True,
-            #                             verbose=verbose)
+            evaluate_model_performance(X_train, 
+                                       X_test, 
+                                       y_train, 
+                                       y_test, 
+                                       configuration, 
+                                        results=results_ridge, 
+                                        model_class=Ridge, 
+                                        features=features,
+                                        param_grid=ridge_params,
+                                        scale_features=True,
+                                        verbose=verbose)
             
             # --------------------------------------
             # ----- Evauluate XGBoost -----
@@ -282,8 +266,8 @@ def compare_input_data_configurations(features,
             #     for max_depth in [2,3,5]:
             #         for learning_rate in [0.01,0.05,0.1]:
 
-            for n_estimators in [500]:
-                for max_depth in [5]:
+            for n_estimators in [30, 50, 100]:
+                for max_depth in [2, 3, 4]:
                     for learning_rate in [0.1]:
 
                         xgb_params.append({
@@ -317,48 +301,45 @@ def compare_input_data_configurations(features,
 
     for results in [results_ridge, results_xgboost]:
 
-        # for r in results:
-        #     print(r)
+        # Sort results by R² descending
+        results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-        try:
+        best_configs.append(results_sorted[0])
 
+        print('Num results', len(results_sorted))
 
-            # Sort results by R² descending
-            results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+        # Show top 3 configurations 
+        top_3 = results_sorted[:3]
+        if verbose == True:
 
-            print()
-            for r in results_sorted:
-                print(r)
+            print("\nTop 3 configurations:\n")
+            for i, res in enumerate(top_3, 1):
 
-            # Get top 5
-            top_3 = results_sorted[:3]
-
-            # best_config = results_sorted[0]
-            best_configs.append(results_sorted[0])
-
-            # print("Best", best_config)
-
-            if verbose == True:
-                print("\nTop 3 configurations:\n")
-                for i, res in enumerate(top_3, 1):
-                    print(f"--- Rank {i} ---")
-                    print()
-                    print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-                    # print("MFC types:", res["mfc_types"])
-                    print("Resistances kOhm:", res["resistances"])
-                    print("Years:", res["years"])
-                    print("R²:", round(res["r2"], 4))
-                    print("MSE:", round(res["mse"], 2))
-                    # print("Alpha:", res["alpha"]),
-                    print("Model Parameters:", (f"{k}: {float(round(v, 3))}, " for k, v in res["parameters"].items())),
-                    # print("N Samples:", res["n_samples"])
-                    # print("Terms:", "v_peak, p_peak, energy, resistance")
-                    print("Terms:", features)
-                    print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+                print(f"--- Rank {i} ---")
+                print()
+                print("Model:", res["model"])
+                print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+                # print("MFC types:", res["mfc_types"])
+                print("Resistances kOhm:", res["resistances"])
+                print("Years:", res["years"])
+                print("R²:", round(res["r2"], 3))
+                print("MSE:", round(res["mse"], 3))
+                print("MAE:", round(res["mae"], 3))
+                # print("Alpha:", res["alpha"]),
+                print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
+                # print("N Samples:", res["n_samples"])
+                # print("Terms:", "v_peak, p_peak, energy, resistance")
+                print("Terms:", features)
+                print(res.keys())
+                if "coefficients" in res:
+                    print("Coefficients:", res["coefficients"])
+                if "intercept" in res:
                     print("Intercept:", res["intercept"])
-                    print()
-        except:
-            print("Skipping model")
+                if "feature_importances" in res:
+                    print("Feature Importances:", res["feature_importances"])
+                # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+                # print("Intercept:", res["intercept"])
+                print()
 
     return best_configs
 
@@ -381,8 +362,10 @@ if __name__ == '__main__':
             r"10\*10(?!\s*AC)", # Carbon veil
             r"20\*30(?!\s*AC)"
             ],
-        resistances_all = [0.1, 1, 3],
-        years_all = [2024, 2025],
+        # resistances_all = [0.1, 1, 3],
+        resistances_all = [1],
+        #years_all = [2024, 2025],
+        years_all = [2024],#, 2025],
         verbose=True
     )
 
