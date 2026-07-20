@@ -155,7 +155,8 @@ def plot_data(all_data, cols_to_plot, title=None, voltage_peaks=False, show_days
 
     # ----- PRIMARY AXIS: MFC Voltage -----                                                                  
     # Build a colormap for primary-axis columns
-    cmap = cm.get_cmap("gist_rainbow")   
+    # cmap = cm.get_cmap("gist_rainbow") 
+    cmap = plt.colormaps["gist_rainbow"]  
     colors = {col: cmap(i / len(cols_to_plot)) for i, col in enumerate(cols_to_plot)}
 
     ax1 = plt.gca()

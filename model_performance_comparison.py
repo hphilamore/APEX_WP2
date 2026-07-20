@@ -22,6 +22,28 @@ mfc_types_regex_mappings = {
         r"20\*30(?!\s*AC)": "20x30"     # match 20*30 NOT followed by AC
     }
 
+ridge_params = [
+                {"alpha": a}
+                for a in np.logspace(-4,4,100)
+            ]
+
+xgb_params = []
+
+# for n_estimators in [100,300,500]:
+#     for max_depth in [2,3,5]:
+#         for learning_rate in [0.01,0.05,0.1]:
+
+for n_estimators in [30, 50, 100]:
+    for max_depth in [2, 3, 4]:
+        for learning_rate in [0.01,0.05,0.1]:
+
+            xgb_params.append({
+                "n_estimators": n_estimators,
+                "max_depth": max_depth,
+                "learning_rate": learning_rate,
+                "random_state":42
+            })
+
 def filter_feature_data(data, sheet_name, col_name, year, resistance):
 
     # Load date-time index for selected mfc
@@ -173,7 +195,7 @@ def extract_best_configs(model_results, verbose=True):
 
         best_configs.append(results_sorted[0])
 
-        print('Num results', len(results_sorted))
+        # print('Num results', len(results_sorted))
 
         # Show top 3 configurations 
         top_3 = results_sorted[:3]
@@ -197,7 +219,6 @@ def extract_best_configs(model_results, verbose=True):
                 # print("N Samples:", res["n_samples"])
                 # print("Terms:", "v_peak, p_peak, energy, resistance")
                 print("Terms:", res["features"])
-                print(res.keys())
                 if "coefficients" in res:
                     print("Coefficients:", res["coefficients"])
                 if "intercept" in res:
@@ -216,12 +237,16 @@ def compare_input_data_configurations(features,
                                    resistances_all, # all resistances to test in configurations 
                                    years_all, # all years to test in configurations 
                                 #    test_size=0.2, 
+                                    models = [Ridge, XGBRegressor],
+                                    model_params = [ridge_params, xgb_params],
+                                    scale_model_features=[True, False],
                                    min_data_points=25,
                                    verbose=True):
     
     # Variables to store results of data combinations that give best performance 
-    results_ridge = []
-    results_xgboost = []
+    # results_ridge = []
+    # results_xgboost = []
+    model_results = [[] for m in models] 
     
     # Get stored feature data
     with open('mfc_features.pkl', 'rb') as f:
@@ -283,67 +308,87 @@ def compare_input_data_configurations(features,
                         test_size=0.2
                     ) 
             
+            for model_class, params, scale_features, results in zip(models, 
+                                                  model_params, 
+                                                  scale_model_features, 
+                                                  model_results):
+                evaluate_model_performance(X_train, 
+                            X_test, 
+                            y_train, 
+                            y_test, 
+                            configuration, 
+                            results=results, 
+                            model_class=model_class, 
+                            features=scale_features,
+                            param_grid=params,
+                            scale_features=scale_features,
+                            verbose=verbose)
+            
             # --------------------------------------
             # ----- Evauluate ridge regression -----
             # --------------------------------------
-            ridge_params = [
-                {"alpha": a}
-                for a in np.logspace(-4,4,100)
-            ]
+            # ridge_params = [
+            #     {"alpha": a}
+            #     for a in np.logspace(-4,4,100)
+            # ]
        
-            evaluate_model_performance(X_train, 
-                                       X_test, 
-                                       y_train, 
-                                       y_test, 
-                                       configuration, 
-                                        results=results_ridge, 
-                                        model_class=Ridge, 
-                                        features=features,
-                                        param_grid=ridge_params,
-                                        scale_features=True,
-                                        verbose=verbose)
+            # evaluate_model_performance(X_train, 
+            #                            X_test, 
+            #                            y_train, 
+            #                            y_test, 
+            #                            configuration, 
+            #                             results=results_ridge, 
+            #                             model_class=Ridge, 
+            #                             features=features,
+            #                             param_grid=ridge_params,
+            #                             scale_features=True,
+            #                             verbose=verbose)
             
             # --------------------------------------
             # ----- Evauluate XGBoost -----
             # --------------------------------------
             
-            xgb_params = []
+            # xgb_params = []
 
-            # for n_estimators in [100,300,500]:
-            #     for max_depth in [2,3,5]:
+            # # for n_estimators in [100,300,500]:
+            # #     for max_depth in [2,3,5]:
+            # #         for learning_rate in [0.01,0.05,0.1]:
+
+            # for n_estimators in [30, 50, 100]:
+            #     for max_depth in [2, 3, 4]:
             #         for learning_rate in [0.01,0.05,0.1]:
 
-            for n_estimators in [30, 50, 100]:
-                for max_depth in [2, 3, 4]:
-                    for learning_rate in [0.1]:
-
-                        xgb_params.append({
-                            "n_estimators": n_estimators,
-                            "max_depth": max_depth,
-                            "learning_rate": learning_rate,
-                            "random_state":42
-                        })
+            #             xgb_params.append({
+            #                 "n_estimators": n_estimators,
+            #                 "max_depth": max_depth,
+            #                 "learning_rate": learning_rate,
+            #                 "random_state":42
+            #             })
             
        
-            evaluate_model_performance(
-                                    X_train,
-                                    X_test,
-                                    y_train,
-                                    y_test,
-                                    configuration,
-                                    results=results_xgboost,
-                                    model_class=XGBRegressor,
-                                    param_grid=xgb_params,
-                                    features=features,
-                                    scale_features=False
-                                )
+            # evaluate_model_performance(
+            #                         X_train,
+            #                         X_test,
+            #                         y_train,
+            #                         y_test,
+            #                         configuration,
+            #                         results=results_xgboost,
+            #                         model_class=XGBRegressor,
+            #                         param_grid=xgb_params,
+            #                         features=features,
+            #                         scale_features=False,
+            #                         verbose=verbose
+            #                     )
             
         else:
             if verbose==True:
                 print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
 
-    best_configs = extract_best_configs([results_ridge, results_xgboost],
-                                        verbose=True)
+    # best_configs = extract_best_configs([results_ridge, results_xgboost],
+    #                                     verbose=True)
+
+    best_configs = extract_best_configs(model_results,
+                                    verbose=verbose)
 
     # best_configs = []
 
@@ -394,6 +439,7 @@ def compare_input_data_configurations(features,
 
 
 if __name__ == '__main__':
+    
     compare_input_data_configurations(
         features=[
             'Vpeak mV', 
@@ -410,11 +456,14 @@ if __name__ == '__main__':
             r"10\*10(?!\s*AC)", # Carbon veil
             r"20\*30(?!\s*AC)"
             ],
-        # resistances_all = [0.1, 1, 3],
-        resistances_all = [1],
-        #years_all = [2024, 2025],
-        years_all = [2024],#, 2025],
-        verbose=True
+        resistances_all = [0.1, 1, 3],
+        # resistances_all = [1],
+        years_all = [2024, 2025],
+        # years_all = [2024],#, 2025],
+        models = [Ridge, XGBRegressor],
+        model_params= [ridge_params, xgb_params],
+        scale_model_features=[True, False],
+        verbose=False
     )
 
 

@@ -20,27 +20,35 @@ def main():
                     ],
         # ['Energy J'],
         # ['Vpeak mV'],
-        [
-                    'Vpeak mV', 
-                    'Ppeak W', 
-                    'Energy J', 
-                    'Resistance kOhms', 
-                    # 'Vfinal mV', 
-                    # 'Pfinal W'
-                    ],
+        # [
+        #             'Vpeak mV', 
+        #             'Ppeak W', 
+        #             'Energy J', 
+        #             'Resistance kOhms', 
+        #             ],
 
 
     ]
 
+    models = [Ridge, XGBRegressor]
+
+    model_results = [[] for model in models] 
+
+    # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
+    # window_lengths = [1/3, 1/2, 1, 2, 3]
+    window_lengths = [1/3, 1/2, 1]
+
     for features in feature_sets:
 
-        window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
-        # window_lengths = [1/3, 1/2, 1, 2, 3]
+        # # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
+        # # window_lengths = [1/3, 1/2, 1, 2, 3]
         # window_lengths = [1/3, 1/2, 1]
-        r2s = []
+        
 
-        cmap = plt.get_cmap('viridis')
+        # cmap = plt.get_cmap('viridis')
+        cmap = plt.colormaps["viridis"]
         n = len(window_lengths)
+
 
         for i, window_length in enumerate(window_lengths):
         # for window_length in [18]:
@@ -65,9 +73,10 @@ def main():
             #             ]
                 
 
-            # Build a ridge regression model using the fetaures and test which combinations of input data give the best performance
-            best_config = compare_input_data_performance(
+            # Test which combinations of input data give the best performance
+            best_configs = compare_input_data_configurations(
                     features=features,
+                    labels=['COD'],
                     # features=[
                     #     'Vpeak mV', 
                     #     'Ppeak W', 
@@ -84,57 +93,86 @@ def main():
                         ],
                     resistances_all = [0.1, 1, 3],
                     years_all = [2024, 2025],
+                    models = models,
+                    model_params= [ridge_params, xgb_params],
+                    scale_model_features=[True, False],
                     verbose = False
                 )
             
-            print()
-            print(f"Best config for window length {round(window_length,3)} days")
-            print("MFC types:", [mfc_types_regex_mappings[p] for p in best_config["mfc_types"]])
-            print("Resistances kOhm:", best_config["resistances"])
-            print("Years:", best_config["years"])
-            print("R²:", round(best_config["r2"], 4))
-            print("MSE:", round(best_config["mse"], 2))
-            print("Alpha:", best_config["alpha"]),
-            # print("N Samples:", res["n_samples"])
-            # print("Terms:", "v_peak, p_peak, energy, resistance")
-            print("Terms:", features)
-            print("Coefficients:", [float(round(r, 3)) for r in best_config["coefficients"]])
-            print("Intercept:", best_config["intercept"])
-            print()
+            for best_config, result in zip(best_configs, model_results):
+
+                # Store result
+                result.append(best_config)
+
+                # Print summary
+                print(f"Best config for window length {round(window_length,3)} hours")
+                print("Model:", best_config["model"])
+                print("MFC types:", [mfc_types_regex_mappings[p] for p in best_config["mfc_types"]])
+                print("Resistances kOhm:", best_config["resistances"])
+                print("Years:", best_config["years"])
+                print("R²:", round(best_config["r2"], 3))
+                print("MAE:", round(best_config["mae"], 3))
+                # print("Alpha:", best_config["alpha"]),
+                # print("N Samples:", res["n_samples"])
+                # print("Terms:", "v_peak, p_peak, energy, resistance")
+                print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in best_config["parameters"].items())),
+                # print("N Samples:", res["n_samples"])
+                # print("Terms:", "v_peak, p_peak, energy, resistance")
+                print("Terms:", best_config["features"])
+                if "coefficients" in best_config:
+                    print("Coefficients:", best_config["coefficients"])
+                if "intercept" in best_config:
+                    print("Intercept:", best_config["intercept"])
+                if "feature_importances" in best_config:
+                    print("Feature Importances:", best_config["feature_importances"])
+                # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+                # print("Intercept:", res["intercept"])
+                print()
+
+    for results, model in zip(model_results, models):
+
+        r2s = []
+
+        model_name = results[0]["model"]
+
+        for best_config in results:
 
             r2s.append(best_config["r2"])
 
-            equation_string = (
-            "COD = " +
-            " + ".join(
-                f"{c:.3f}*{f}"
-                for c, f in zip(best_config["coefficients"], features)
-                ) +
-            f" + {best_config['intercept'][0]:.3f}" +
-            f", R2={best_config['r2']:.3f}"
-            )
+            if "coefficients" in best_config:
+                equation_string = (
+                "COD = " +
+                " + ".join(
+                    f"{c:.3f}*{f}"
+                    for c, f in zip(best_config["coefficients"], features)
+                    ) +
+                f" + {best_config['intercept'][0]:.3f}" +
+                f", R2={best_config['r2']:.3f}"
+                )
+            else:
+                equation_string = None
 
             colour = cmap(i / (n - 1))
 
             plt.scatter(window_length, best_config["r2"], 
-                        # label=equation_string, 
+                        label=equation_string, 
                         color=colour
                         )
-        
-        feature_string = (", ".join(features))
+                
+        feature_string = (model_name + ", ".join(features))
         plt.plot(window_lengths, r2s, label=feature_string)
         plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2))
         plt.subplots_adjust(bottom=0.4)
         plt.xlabel("Time (hours)")
         plt.ylabel("R2 (best configuration)")
         plt.title(feature_string)
-        # plt.savefig(f"figs/Ridge-R2-{feature_string}.png", bbox_inches="tight")
+        plt.savefig(f"figs/{feature_string}.png", bbox_inches="tight")
         # # plt.show()
         # plt.close()
-    
-    plt.savefig(f"figs/all_v2_Ridge-R2.png", bbox_inches="tight")
-    # plt.show()
-    plt.close()
+            
+    # plt.savefig(f"figs/all_v2_Ridge-R2.png", bbox_inches="tight")
+    # # plt.show()
+    # plt.close()
 
 if __name__ == "__main__":
     main()
