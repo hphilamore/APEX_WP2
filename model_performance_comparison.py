@@ -122,10 +122,10 @@ def evaluate_model_performance(X_train,
             "mfc_types": configuration['subset_mfc_types'],
             "resistances": configuration['subset_resistances'],
             "years": configuration['subset_years'],
+            "features": features,
             "r2": r2,
             "mse": mse,
             "mae": mae,
-            "features": features,
             "model": model.__class__.__name__,
             "parameters": params,
             # "alpha": alpha,
@@ -160,49 +160,55 @@ def evaluate_model_performance(X_train,
     # Store the best value for this configuration with hyperparameter tuning 
     results.append(param_gridsearch_sorted[0])
 
-# def extract_best_configurations(model_results, 
-#                                 verbose=True):
-    
-#         best_configs = []
 
-#         for results in model_results:
+def extract_best_configs(model_results, verbose=True):
 
-#             # Sort results by R² descending
-#             results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+    best_configs = []
 
-#             best_configs.append(results_sorted[0])
+    # for results in [results_ridge, results_xgboost]:
+    for results in model_results:
 
-#             print('Num results', len(results_sorted))
+        # Sort results by R² descending
+        results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-#             # Show top 3 configurations 
-#             top_3 = results_sorted[:3]
-#             if verbose == True:
+        best_configs.append(results_sorted[0])
 
-#                 print("\nTop 3 configurations:\n")
-#                 for i, res in enumerate(top_3, 1):
+        print('Num results', len(results_sorted))
 
-#                     print(f"--- Rank {i} ---")
-#                     print()
-#                     print("Model:", res["model"])
-#                     print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-#                     # print("MFC types:", res["mfc_types"])
-#                     print("Resistances kOhm:", res["resistances"])
-#                     print("Years:", res["years"])
-#                     print("R²:", round(res["r2"], 3))
-#                     print("MSE:", round(res["mse"], 3))
-#                     print("MAE:", round(res["mae"], 3))
-#                     print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
-#                     # print("N Samples:", res["n_samples"])
-#                     print("Terms:", res["features"])
-#                     if "coefficients" in res:
-#                         print("Coefficients:", res["coefficients"])
-#                     if "intercept" in res:
-#                         print("Intercept:", res["intercept"])
-#                     if "feature_importances" in res:
-#                         print("Feature Importances:", res["feature_importances"])
-#                     print()
+        # Show top 3 configurations 
+        top_3 = results_sorted[:3]
+        if verbose == True:
 
-#         return best_configs
+            print("\nTop 3 configurations:\n")
+            for i, res in enumerate(top_3, 1):
+
+                print(f"--- Rank {i} ---")
+                print()
+                print("Model:", res["model"])
+                print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+                # print("MFC types:", res["mfc_types"])
+                print("Resistances kOhm:", res["resistances"])
+                print("Years:", res["years"])
+                print("R²:", round(res["r2"], 3))
+                print("MSE:", round(res["mse"], 3))
+                print("MAE:", round(res["mae"], 3))
+                # print("Alpha:", res["alpha"]),
+                print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
+                # print("N Samples:", res["n_samples"])
+                # print("Terms:", "v_peak, p_peak, energy, resistance")
+                print("Terms:", res["features"])
+                print(res.keys())
+                if "coefficients" in res:
+                    print("Coefficients:", res["coefficients"])
+                if "intercept" in res:
+                    print("Intercept:", res["intercept"])
+                if "feature_importances" in res:
+                    print("Feature Importances:", res["feature_importances"])
+                # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+                # print("Intercept:", res["intercept"])
+                print()
+    return best_configs
+
 
 def compare_input_data_configurations(features, 
                                       labels,
@@ -336,55 +342,55 @@ def compare_input_data_configurations(features,
             if verbose==True:
                 print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
 
-    
-        # best_configs = extract_best_configurations([results_ridge, results_xgboost],
-        #                                            verbose=True)
-    
-        best_configs = []
+    best_configs = extract_best_configs([results_ridge, results_xgboost],
+                                        verbose=True)
 
-        for results in [results_ridge, results_xgboost]:
+    # best_configs = []
 
-            # Sort results by R² descending
-            results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+    # for results in [results_ridge, results_xgboost]:
 
-            best_configs.append(results_sorted[0])
+    #     # Sort results by R² descending
+    #     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-            print('Num results', len(results_sorted))
+    #     best_configs.append(results_sorted[0])
 
-            # Show top 3 configurations 
-            top_3 = results_sorted[:3]
-            if verbose == True:
+    #     print('Num results', len(results_sorted))
 
-                print("\nTop 3 configurations:\n")
-                for i, res in enumerate(top_3, 1):
+    #     # Show top 3 configurations 
+    #     top_3 = results_sorted[:3]
+    #     if verbose == True:
 
-                    print(f"--- Rank {i} ---")
-                    print()
-                    print("Model:", res["model"])
-                    print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-                    # print("MFC types:", res["mfc_types"])
-                    print("Resistances kOhm:", res["resistances"])
-                    print("Years:", res["years"])
-                    print("R²:", round(res["r2"], 3))
-                    print("MSE:", round(res["mse"], 3))
-                    print("MAE:", round(res["mae"], 3))
-                    # print("Alpha:", res["alpha"]),
-                    print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
-                    # print("N Samples:", res["n_samples"])
-                    # print("Terms:", "v_peak, p_peak, energy, resistance")
-                    print("Terms:", features)
-                    print(res.keys())
-                    if "coefficients" in res:
-                        print("Coefficients:", res["coefficients"])
-                    if "intercept" in res:
-                        print("Intercept:", res["intercept"])
-                    if "feature_importances" in res:
-                        print("Feature Importances:", res["feature_importances"])
-                    # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-                    # print("Intercept:", res["intercept"])
-                    print()
+    #         print("\nTop 3 configurations:\n")
+    #         for i, res in enumerate(top_3, 1):
 
-        return best_configs
+    #             print(f"--- Rank {i} ---")
+    #             print()
+    #             print("Model:", res["model"])
+    #             print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+    #             # print("MFC types:", res["mfc_types"])
+    #             print("Resistances kOhm:", res["resistances"])
+    #             print("Years:", res["years"])
+    #             print("R²:", round(res["r2"], 3))
+    #             print("MSE:", round(res["mse"], 3))
+    #             print("MAE:", round(res["mae"], 3))
+    #             # print("Alpha:", res["alpha"]),
+    #             print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
+    #             # print("N Samples:", res["n_samples"])
+    #             # print("Terms:", "v_peak, p_peak, energy, resistance")
+    #             print("Terms:", res["features"])
+    #             print(res.keys())
+    #             if "coefficients" in res:
+    #                 print("Coefficients:", res["coefficients"])
+    #             if "intercept" in res:
+    #                 print("Intercept:", res["intercept"])
+    #             if "feature_importances" in res:
+    #                 print("Feature Importances:", res["feature_importances"])
+    #             # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+    #             # print("Intercept:", res["intercept"])
+    #             print()
+
+    return best_configs
+
 
 
 if __name__ == '__main__':
@@ -410,7 +416,6 @@ if __name__ == '__main__':
         years_all = [2024],#, 2025],
         verbose=True
     )
-
 
 
 
