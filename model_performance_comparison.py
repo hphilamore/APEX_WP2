@@ -252,9 +252,9 @@ def compare_input_data_configurations(features,
                         test_size=0.2
                     ) 
             
-            # --------------------------------------
-            # ----- Evauluate ridge regression -----
-            # --------------------------------------
+            # # --------------------------------------
+            # # ----- Evauluate ridge regression -----
+            # # --------------------------------------
             # ridge_params = [
             #     {"alpha": a}
             #     for a in np.logspace(-4,4,100)
@@ -282,9 +282,9 @@ def compare_input_data_configurations(features,
             #     for max_depth in [2,3,5]:
             #         for learning_rate in [0.01,0.05,0.1]:
 
-            for n_estimators in [100]:
-                for max_depth in [2]:
-                    for learning_rate in [0.01]:
+            for n_estimators in [500]:
+                for max_depth in [5]:
+                    for learning_rate in [0.1]:
 
                         xgb_params.append({
                             "n_estimators": n_estimators,
@@ -317,36 +317,48 @@ def compare_input_data_configurations(features,
 
     for results in [results_ridge, results_xgboost]:
 
-        # Sort results by R² descending
-        results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+        # for r in results:
+        #     print(r)
 
-        # Get top 5
-        top_3 = results_sorted[:3]
+        try:
 
-        # best_config = results_sorted[0]
-        best_configs.append(results_sorted[0])
 
-        # print("Best", best_config)
+            # Sort results by R² descending
+            results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-        if verbose == True:
-            print("\nTop 3 configurations:\n")
-            for i, res in enumerate(top_3, 1):
-                print(f"--- Rank {i} ---")
-                print()
-                print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-                # print("MFC types:", res["mfc_types"])
-                print("Resistances kOhm:", res["resistances"])
-                print("Years:", res["years"])
-                print("R²:", round(res["r2"], 4))
-                print("MSE:", round(res["mse"], 2))
-                # print("Alpha:", res["alpha"]),
-                print("Model Parameters:", (f"{k}: {float(round(v, 3))}, " for k, v in res["parameters"].items())),
-                # print("N Samples:", res["n_samples"])
-                # print("Terms:", "v_peak, p_peak, energy, resistance")
-                print("Terms:", features)
-                print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-                print("Intercept:", res["intercept"])
-                print()
+            print()
+            for r in results_sorted:
+                print(r)
+
+            # Get top 5
+            top_3 = results_sorted[:3]
+
+            # best_config = results_sorted[0]
+            best_configs.append(results_sorted[0])
+
+            # print("Best", best_config)
+
+            if verbose == True:
+                print("\nTop 3 configurations:\n")
+                for i, res in enumerate(top_3, 1):
+                    print(f"--- Rank {i} ---")
+                    print()
+                    print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+                    # print("MFC types:", res["mfc_types"])
+                    print("Resistances kOhm:", res["resistances"])
+                    print("Years:", res["years"])
+                    print("R²:", round(res["r2"], 4))
+                    print("MSE:", round(res["mse"], 2))
+                    # print("Alpha:", res["alpha"]),
+                    print("Model Parameters:", (f"{k}: {float(round(v, 3))}, " for k, v in res["parameters"].items())),
+                    # print("N Samples:", res["n_samples"])
+                    # print("Terms:", "v_peak, p_peak, energy, resistance")
+                    print("Terms:", features)
+                    print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+                    print("Intercept:", res["intercept"])
+                    print()
+        except:
+            print("Skipping model")
 
     return best_configs
 
