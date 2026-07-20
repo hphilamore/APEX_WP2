@@ -13,8 +13,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
 import pickle
 
+mfc_types_regex_mappings = {
+        r"10\*10\s*AC": "10x10_AC",
+        r"20\*30\s*AC": "20x30_AC",
+        r"10\*10(?!\s*AC)": "10x10",  # match 10*10 NOT followed by AC
+        r"20\*30(?!\s*AC)": "20x30"     # match 20*30 NOT followed by AC
+    }
 
-def extract_data_subset(data, sheet_name, col_name, year, resistance):
+def filter_feature_data(data, sheet_name, col_name, year, resistance):
 
     # Load date-time index for selected mfc
     COD_date_time_index = data['COD date time index'][col_name].copy()
@@ -30,8 +36,6 @@ def extract_data_subset(data, sheet_name, col_name, year, resistance):
     mask_resistance = [r == resistance for r in resistance_column]
     feature = [f for f, c, r in zip(feature, mask_cod, mask_resistance) if c and r]
 
-    # print(len(feature))
-
     return feature
 
 
@@ -42,7 +46,8 @@ def all_subsets(lst):
         for combo in itertools.combinations(lst, r)
     ]
 
-def prepare_model_data(model_data, labels, features):
+
+def prepare_model_data(model_data, labels, features, test_size):
 
     # Create DataFrame from the dictionary to make it easier to remove NaN values
     df = pd.DataFrame({f: model_data[f] for f in labels + features})
@@ -58,25 +63,40 @@ def prepare_model_data(model_data, labels, features):
 
     X = df[features].to_numpy()
 
-    return y, X
-
-
-def evaluate_model_performance(X, y, results, configuration, 
-                               model_class, features, test_size, 
-                               min_data_points, verbose=True):
-
-    # Drop any configurations with less than minimum threshold
-    if len(y) < min_data_points:
-        if verbose==True:
-            print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
-                configuration['subset_resistances'],
-                configuration['subset_years'])
-        return
+    # # Drop any configurations with less than minimum threshold
+    # if len(y) < min_data_points:
+    #     if verbose==True:
+    #         print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
+    #             configuration['subset_resistances'],
+    #             configuration['subset_years'])
+    #     continue
 
     # Split into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=42
-    )
+    )       
+
+    return X_train, X_test, y_train, y_test 
+
+
+def evaluate_model_performance(X_train, X_test, y_train, y_test, results, configuration, 
+                               model_class, features, 
+                               #test_size, 
+                            #    min_data_points, 
+                            verbose=True):
+
+    # # Drop any configurations with less than minimum threshold
+    # if len(y) < min_data_points:
+    #     if verbose==True:
+    #         print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
+    #             configuration['subset_resistances'],
+    #             configuration['subset_years'])
+    #     return
+
+    # # Split into training and testing sets
+    # X_train, X_test, y_train, y_test = train_test_split(
+    #     X, y, test_size=test_size, random_state=42
+    # )
 
     # Scale all features to mean 0, std 1, to retain feature importance 
     scaler = StandardScaler()
@@ -117,7 +137,7 @@ def evaluate_model_performance(X, y, results, configuration,
             "coefficients": model.coef_.copy(),
             "intercept": model.intercept_,
             "feature_scales": scaler.scale_.copy(),
-            "n_samples": len(y)
+            "n_samples": len(y_train) + len(y_pred)
             })
         
     # Sort results by R² descending
@@ -132,45 +152,16 @@ def evaluate_model_performance(X, y, results, configuration,
     results.append(scores_sorted[0])
 
 
-# MFC types
-# mfc_types_all = [
-#                         r"10\*10\s*AC",     # Carbon veil + activated carbon
-#                         r"20\*30\s*AC",
-#                         r"10\*10(?!\s*AC)", # Carbon veil
-#                         r"20\*30(?!\s*AC)"
-#                         ]
-
-mfc_types_regex_mappings = {
-        r"10\*10\s*AC": "10x10_AC",
-        r"20\*30\s*AC": "20x30_AC",
-        r"10\*10(?!\s*AC)": "10x10",  # match 10*10 NOT followed by AC
-        r"20\*30(?!\s*AC)": "20x30"     # match 20*30 NOT followed by AC
-    }
-
-# Resistance values to include in data
-# resistances_all = [0.1, 1, 3]
-
-# Years to include in data
-# years_all = [2024, 2025]
-
-# Variables to store analysis of data combinations that give best results
-# best_r2 = -float("inf")
-# best_config = None
-# results = []
-
-# # Get stored feature data
-# with open('mfc_features.pkl', 'rb') as f:
-#     mfc_features = pickle.load(f)
-
-# # Get the column / mfc names from the first dictionary in the nested dictionary of fetaures
-# first_feature = next(iter(mfc_features))
-# mfc_names = mfc_features[first_feature].keys()
 
 
-def compare_input_data_performance(features, 
-                                   mfc_types_all, 
-                                   resistances_all, 
-                                   years_all,
+
+def compare_input_data_configurations(features, 
+                                      labels,
+                                   mfc_types_all, # all mfc types to test in configurations 
+                                   resistances_all, # all resistances to test in configurations 
+                                   years_all, # all years to test in configurations 
+                                #    test_size=0.2, 
+                                   min_data_points=25,
                                    verbose=True):
     
     # Variables to store analysis of data combinations that give best results
@@ -196,13 +187,13 @@ def compare_input_data_performance(features,
                          'subset_years':subset_years}
         
 
-        # Data structure to hold training/test data
-        model_data = {k : [] for k in mfc_features}
-
-        # Flag to determine wether results of this configuration are saved
+        # Flag to determine whether results of this configuration are saved
         skip_configuration = False
 
-        # Filter MFC columns, skipping any that aren't in current subset 
+        # Data structure to hold data filtered for this configuration 
+        configuration_data = {k : [] for k in mfc_features}
+
+        # Filter MFC columns, skipping any that aren't in current configuration
         for col in mfc_names:
             if not any(re.search(p, col) for p in subset_mfc_types):
                 continue
@@ -212,10 +203,10 @@ def compare_input_data_performance(features,
 
                 for resistance in subset_resistances:
 
-                    for key in model_data:
-                        # model_data[key].extend(extract_data_subset(mfc_features, key, col, year, resistance))
-                        filtered_feature = extract_data_subset(mfc_features, key, col, year, resistance)
-                        model_data[key].extend(filtered_feature)
+                    for key in configuration_data:
+                        # model_data[key].extend(filter_feature_data(mfc_features, key, col, year, resistance))
+                        filtered_feature = filter_feature_data(mfc_features, key, col, year, resistance)
+                        configuration_data[key].extend(filtered_feature)
 
                         # If configurations contains any combinations with zero data points, don't store result
                         if len(filtered_feature) == 0:
@@ -234,23 +225,62 @@ def compare_input_data_performance(features,
             #         #   'Pfinal W'
             #         ]
 
-            y, X = prepare_model_data(model_data, 
-                                      labels=['COD'],
-                                    #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
-                                    #   features=['Vpeak mV', 'Ppeak W', 
-                                    #             'Energy J', 'Resistance kOhms', 
-                                    #             'Window length (hours)',
-                                    #             'Vfinal mV', 'Pfinal W'
-                                    #             ]
-                                    features=features
-                                      )        
+            # y, X = prepare_model_data(model_data, 
+            #                           labels=['COD'],
+            #                         #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
+            #                         #   features=['Vpeak mV', 'Ppeak W', 
+            #                         #             'Energy J', 'Resistance kOhms', 
+            #                         #             'Window length (hours)',
+            #                         #             'Vfinal mV', 'Pfinal W'
+            #                         #             ]
+            #                         features=features
+            #                           ) 
 
-            evaluate_model_performance(X, y, results, configuration, 
+            # y, X = prepare_model_data(configuration_data, 
+            #                 labels=['COD'],
+            #             #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
+            #             #   features=['Vpeak mV', 'Ppeak W', 
+            #             #             'Energy J', 'Resistance kOhms', 
+            #             #             'Window length (hours)',
+            #             #             'Vfinal mV', 'Pfinal W'
+            #             #             ]
+            #             features=features
+            #         ) 
+
+            # Drop any configurations with less than minimum threshold
+            if len(configuration_data[labels[0]]) < min_data_points:
+                if verbose==True:
+                    print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
+                        configuration['subset_resistances'],
+                        configuration['subset_years'])
+                continue
+
+            X_train, X_test, y_train, y_test = prepare_model_data(
+                        configuration_data, 
+                        labels=['COD'],
+                        #   features=['Vpeak mV', 'Ppeak W', 'Energy J', 'Resistance kOhms']
+                        #   features=['Vpeak mV', 'Ppeak W', 
+                        #             'Energy J', 'Resistance kOhms', 
+                        #             'Window length (hours)',
+                        #             'Vfinal mV', 'Pfinal W'
+                        #             ]
+                        features=features,
+                        test_size=0.2
+                    ) 
+
+
+
+            # # Split into training and testing sets
+            # X_train, X_test, y_train, y_test = train_test_split(
+            #     X, y, test_size=test_size, random_state=42
+            # )       
+
+            evaluate_model_performance(X_train, X_test, y_train, y_test, results, configuration, 
                                     # model=Ridge(alpha=1.0), 
                                     model_class=Ridge, 
                                     features=features,
-                                    test_size=0.2, 
-                                    min_data_points=25,
+                                    # test_size=0.2, 
+                                    # min_data_points=25,
                                     verbose=verbose)
         else:
             if verbose==True:
@@ -290,7 +320,7 @@ def compare_input_data_performance(features,
 
 
 if __name__ == '__main__':
-    compare_input_data_performance(
+    compare_input_data_configurations(
         features=[
             'Vpeak mV', 
             'Ppeak W', 
@@ -299,6 +329,7 @@ if __name__ == '__main__':
             # 'Vfinal mV', 
             # 'Pfinal W'
             ],
+        labels=['COD'],
         mfc_types_all = [
             r"10\*10\s*AC",     # Carbon veil + activated carbon
             r"20\*30\s*AC",
@@ -306,7 +337,8 @@ if __name__ == '__main__':
             r"20\*30(?!\s*AC)"
             ],
         resistances_all = [0.1, 1, 3],
-        years_all = [2024, 2025]
+        years_all = [2024, 2025],
+        verbose=True
     )
 
 

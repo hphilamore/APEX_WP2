@@ -10,16 +10,16 @@ def main():
     # import_data(raw_data_file_path)
 
     feature_sets = [
-        # [
-        #             'Vpeak mV', 
-        #             'Ppeak W', 
-        #             'Energy J', 
-        #             'Resistance kOhms', 
-        #             'Vfinal mV', 
-        #             'Pfinal W'
-        #             ],
-        ['Energy J'],
-        ['Vpeak mV'],
+        [
+                    'Vpeak mV', 
+                    'Ppeak W', 
+                    'Energy J', 
+                    'Resistance kOhms', 
+                    'Vfinal mV', 
+                    'Pfinal W'
+                    ],
+        # ['Energy J'],
+        # ['Vpeak mV'],
         [
                     'Vpeak mV', 
                     'Ppeak W', 
