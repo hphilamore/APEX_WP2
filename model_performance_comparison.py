@@ -159,11 +159,13 @@ def evaluate_model_performance(X_train,
         
         # Store model-specific information
         if hasattr(model, "coef_"):
-            param_result["coefficients"] = model.coef_.copy()
-            param_result["intercept"] = model.intercept_
+            # param_result["coefficients"] = model.coef_.copy()
+            param_result["coefficients"] = model.coef_.tolist()
+            param_result["intercept"] = float(model.intercept_[0])
 
         if hasattr(model, "feature_importances_"):
-            param_result["feature_importances"] = model.feature_importances_
+            # param_result["feature_importances"] = model.feature_importances_
+            param_result["feature_importances"] = model.feature_importances_.tolist()
 
         if scaler is not None:
             param_result["feature_scales"] = scaler.scale_
@@ -190,9 +192,12 @@ def extract_best_configs(model_results, verbose=True):
     # for results in [results_ridge, results_xgboost]:
     for results in model_results:
 
+        print('Results', results)
+
         # Sort results by R² descending
         results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
+        # Store the result that gives the highest R2 value
         best_configs.append(results_sorted[0])
 
         # print('Num results', len(results_sorted))
@@ -312,17 +317,18 @@ def compare_input_data_configurations(features,
                                                   model_params, 
                                                   scale_model_features, 
                                                   model_results):
-                evaluate_model_performance(X_train, 
+                evaluate_model_performance(
+                            X_train, 
                             X_test, 
                             y_train, 
                             y_test, 
                             configuration, 
                             results=results, 
                             model_class=model_class, 
-                            features=scale_features,
                             param_grid=params,
+                            features=features,
                             scale_features=scale_features,
-                            verbose=verbose)
+                            verbose=verbose)               
             
             # --------------------------------------
             # ----- Evauluate ridge regression -----
@@ -382,7 +388,8 @@ def compare_input_data_configurations(features,
             
         else:
             if verbose==True:
-                print('Skip config (redundant mfc type/resistance/year in config)', subset_mfc_types, subset_resistances, subset_years)
+                print('Skip config (redundant mfc type/resistance/year in config)', 
+                      subset_mfc_types, subset_resistances, subset_years)
 
     # best_configs = extract_best_configs([results_ridge, results_xgboost],
     #                                     verbose=True)
