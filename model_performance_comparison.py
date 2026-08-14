@@ -261,44 +261,48 @@ def compare_input_data_configurations(features,
     first_feature = next(iter(mfc_features))
     mfc_names = mfc_features[first_feature].keys()
 
-    # Try all possble combinations of MFCs, resistance values and year section of data (2024/2025)
+    # Generate all possble subset combinations of MFCs, resistance values and year section of data (2024/2025)
     for subset_mfc_types, subset_resistances, subset_years in itertools.product( all_subsets(mfc_types_all),
                                                                                  all_subsets(resistances_all),
                                                                                  all_subsets(years_all)):
         # print(subset_mfc_types, subset_resistances, subset_years)
-        configuration = {'subset_mfc_types': subset_mfc_types,
+        subset = {'subset_mfc_types': subset_mfc_types,
                          'subset_resistances': subset_resistances,
                          'subset_years':subset_years}
         
 
-        # Flag to determine whether results of this configuration are saved
-        skip_configuration = False
+        # Flag to determine whether results of this subset are saved
+        skip_subset = False
 
-        # Data structure to hold data filtered for this configuration 
-        configuration_data = {k : [] for k in mfc_features}
+        # Data structure to hold data filtered to contain only this subset
+        subset_data = {k : [] for k in mfc_features}
 
-        # Filter MFC columns, skipping any that aren't in current configuration
+        # Filter MFC columns, skipping any that aren't in this subset
         for col in mfc_names:
             if not any(re.search(p, col) for p in subset_mfc_types):
                 continue
 
-            # Filter selected data to include only years and resistances in current subset 
+            # Filter feature data to include only years and resistances in current subset 
             for year in subset_years:
-
                 for resistance in subset_resistances:
-
-                    for key in configuration_data:
-                        # model_data[key].extend(filter_feature_data(mfc_features, key, col, year, resistance))
+                    for key in subset_data:
                         filtered_feature = filter_feature_data(mfc_features, key, col, year, resistance)
-                        configuration_data[key].extend(filtered_feature)
+                        subset_data[key].extend(filtered_feature)
 
-                        # If configurations contains any combinations with zero data points, don't store result
+                        # Reject any combinations within the subset with zero data points. 
                         if len(filtered_feature) == 0:
                             skip_configuration = True
 
-        if skip_configuration == False:
+        # Reject any combinations within the subset with zero data points. The remaining subset is captured elsewhere
+        if skip_configuration == True:
+            if verbose==True:
+                print('Skip config (redundant mfc type/resistance/year in config)', 
+                      subset_mfc_types, subset_resistances, subset_years)
 
-            # Drop any configurations with less than minimum threshold
+        # If the subset hasn't been rejected
+        else:
+
+            # Drop any subsets with insufficient data
             if len(configuration_data[labels[0]]) < min_data_points:
                 if verbose==True:
                     print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
@@ -306,13 +310,15 @@ def compare_input_data_configurations(features,
                         configuration['subset_years'])
                 continue
 
+            # Create train and test data
             X_train, X_test, y_train, y_test = prepare_model_data(
                         configuration_data, 
                         labels=['COD'],
                         features=features,
                         test_size=0.2
                     ) 
-            
+
+            # Evaulate all models 
             for model_class, params, scale_features, results in zip(models, 
                                                   model_params, 
                                                   scale_model_features, 
@@ -329,117 +335,10 @@ def compare_input_data_configurations(features,
                             features=features,
                             scale_features=scale_features,
                             verbose=verbose)               
-            
-            # --------------------------------------
-            # ----- Evauluate ridge regression -----
-            # --------------------------------------
-            # ridge_params = [
-            #     {"alpha": a}
-            #     for a in np.logspace(-4,4,100)
-            # ]
-       
-            # evaluate_model_performance(X_train, 
-            #                            X_test, 
-            #                            y_train, 
-            #                            y_test, 
-            #                            configuration, 
-            #                             results=results_ridge, 
-            #                             model_class=Ridge, 
-            #                             features=features,
-            #                             param_grid=ridge_params,
-            #                             scale_features=True,
-            #                             verbose=verbose)
-            
-            # --------------------------------------
-            # ----- Evauluate XGBoost -----
-            # --------------------------------------
-            
-            # xgb_params = []
 
-            # # for n_estimators in [100,300,500]:
-            # #     for max_depth in [2,3,5]:
-            # #         for learning_rate in [0.01,0.05,0.1]:
-
-            # for n_estimators in [30, 50, 100]:
-            #     for max_depth in [2, 3, 4]:
-            #         for learning_rate in [0.01,0.05,0.1]:
-
-            #             xgb_params.append({
-            #                 "n_estimators": n_estimators,
-            #                 "max_depth": max_depth,
-            #                 "learning_rate": learning_rate,
-            #                 "random_state":42
-            #             })
-            
-       
-            # evaluate_model_performance(
-            #                         X_train,
-            #                         X_test,
-            #                         y_train,
-            #                         y_test,
-            #                         configuration,
-            #                         results=results_xgboost,
-            #                         model_class=XGBRegressor,
-            #                         param_grid=xgb_params,
-            #                         features=features,
-            #                         scale_features=False,
-            #                         verbose=verbose
-            #                     )
-            
-        else:
-            if verbose==True:
-                print('Skip config (redundant mfc type/resistance/year in config)', 
-                      subset_mfc_types, subset_resistances, subset_years)
-
-    # best_configs = extract_best_configs([results_ridge, results_xgboost],
-    #                                     verbose=True)
-
+    # Extract the best configurations for each model
     best_configs = extract_best_configs(model_results,
                                     verbose=verbose)
-
-    # best_configs = []
-
-    # for results in [results_ridge, results_xgboost]:
-
-    #     # Sort results by R² descending
-    #     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
-
-    #     best_configs.append(results_sorted[0])
-
-    #     print('Num results', len(results_sorted))
-
-    #     # Show top 3 configurations 
-    #     top_3 = results_sorted[:3]
-    #     if verbose == True:
-
-    #         print("\nTop 3 configurations:\n")
-    #         for i, res in enumerate(top_3, 1):
-
-    #             print(f"--- Rank {i} ---")
-    #             print()
-    #             print("Model:", res["model"])
-    #             print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-    #             # print("MFC types:", res["mfc_types"])
-    #             print("Resistances kOhm:", res["resistances"])
-    #             print("Years:", res["years"])
-    #             print("R²:", round(res["r2"], 3))
-    #             print("MSE:", round(res["mse"], 3))
-    #             print("MAE:", round(res["mae"], 3))
-    #             # print("Alpha:", res["alpha"]),
-    #             print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
-    #             # print("N Samples:", res["n_samples"])
-    #             # print("Terms:", "v_peak, p_peak, energy, resistance")
-    #             print("Terms:", res["features"])
-    #             print(res.keys())
-    #             if "coefficients" in res:
-    #                 print("Coefficients:", res["coefficients"])
-    #             if "intercept" in res:
-    #                 print("Intercept:", res["intercept"])
-    #             if "feature_importances" in res:
-    #                 print("Feature Importances:", res["feature_importances"])
-    #             # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-    #             # print("Intercept:", res["intercept"])
-    #             print()
 
     return best_configs
 
