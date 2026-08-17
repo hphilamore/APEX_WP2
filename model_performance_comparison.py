@@ -14,6 +14,13 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import cross_val_score
 from xgboost import XGBRegressor
 import pickle
+from openpyxl import Workbook
+
+# Create a new workbook
+work_book = Workbook()
+
+# Remove the default empty sheet
+work_book.remove(work_book.active)
 
 mfc_types_regex_mappings = {
         r"10\*10\s*AC": "10x10_AC",
@@ -43,6 +50,29 @@ for n_estimators in [30, 50, 100]:
                 "learning_rate": learning_rate,
                 "random_state":42
             })
+
+def write_dicts_to_sheet(wb, sheet_name, rows):
+    """Write a list of dictionaries to a new Excel worksheet."""
+
+    # # Create a new workbook
+    # wb = Workbook()
+
+    # # Remove the default empty sheet
+    # wb.remove(wb.active)
+
+    ws = wb.create_sheet(title=sheet_name)
+
+    # Column headings
+    ws.append(list(rows[0].keys()))
+
+    # Data
+    for row in rows:
+        ws.append(list(row.values()))
+
+    # # Save workbook to excel file
+    # wb.save("model_performance.xlsx")
+
+    # return ws
 
 def filter_feature_data(data, sheet_name, col_name, year, resistance):
 
@@ -108,6 +138,8 @@ def evaluate_model_performance(X_train,
                                verbose=True):
     
 
+    print("Evaluating models...")
+
     # Scale all features to mean 0, std 1, to retain feature importance 
     if scale_features:
         scaler = StandardScaler()
@@ -125,6 +157,8 @@ def evaluate_model_performance(X_train,
     for params in param_grid:
 
         model = model_class(**params)
+
+        print(f"Evaluating {model}")
 
         # Train the model
         # model.fit(X_train, y_train)
@@ -192,7 +226,7 @@ def extract_best_configs(model_results, verbose=True):
     # for results in [results_ridge, results_xgboost]:
     for results in model_results:
 
-        print('Results', results)
+        # print('Results', results)
 
         # Sort results by R² descending
         results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
@@ -236,18 +270,33 @@ def extract_best_configs(model_results, verbose=True):
     return best_configs
 
 
+def format_subset_result(result):
+    subset = result["subset"]
+
+    return {
+        "MFC Types": ", ".join(subset["subset_mfc_types"]),
+        "Resistances (kOhm)": ", ".join(map(str, subset["subset_resistances"])),
+        "Years": ", ".join(map(str, subset["subset_years"])),
+        "N Data Points": result["n_data_points"],
+        "Included": result["included"],
+        "Reason": result["reason"],
+    }
+
+
 def compare_input_data_configurations(features, 
                                       labels,
                                    mfc_types_all, # all mfc types to test in configurations 
                                    resistances_all, # all resistances to test in configurations 
                                    years_all, # all years to test in configurations 
                                 #    test_size=0.2, 
+                                wb,
                                     models = [Ridge, XGBRegressor],
                                     model_params = [ridge_params, xgb_params],
                                     scale_model_features=[True, False],
                                 #    min_data_points=25,
                                 target_data_points = 25,
-                                   verbose=True):
+                                   verbose=True,
+                                   window_length=None):
     
     # Variables to store results of data combinations that give best performance 
     # results_ridge = []
@@ -290,7 +339,11 @@ def compare_input_data_configurations(features,
             for year in subset_years:
                 for resistance in subset_resistances:
                     for key in subset_data:
-                        filtered_feature = filter_feature_data(mfc_features, key, col, year, resistance)
+                        filtered_feature = filter_feature_data(mfc_features, 
+                                                               key, 
+                                                               col, 
+                                                               year, 
+                                                               resistance)
                         subset_data[key].extend(filtered_feature)
 
                         # Detect MFC/resistance/year combinations with zero data points 
@@ -314,25 +367,13 @@ def compare_input_data_configurations(features,
         # If the subset hasn't been rejected
         else:
 
-            # # Drop subsets with insufficient data
-            # if len(configuration_data[labels[0]]) < min_data_points:
-            #     if verbose==True:
-            #         print('Skip config (number of data points below threshold)', 
-            #                 configuration['subset_mfc_types'],
-            #                 configuration['subset_resistances'],
-            #             c   onfiguration['subset_years'])
-            #     continue
-
-            # n_data_points = len(subset_data[labels[0]])
-
-
             # Skip subsets with insufficient data
             if n_data_points < target_data_points:
                 subset_summary.append({
                                 'subset': subset,
                                 'n_data_points': n_data_points,
                                 'included': False,
-                                'reason': 'Too few data points'
+                                'reason': f'Too few data points {n_data_points}, threshold = {target_data_points}'
                             })
                 
                 if verbose:
@@ -397,11 +438,23 @@ def compare_input_data_configurations(features,
     # Extract the best configurations for each model
     best_configs = extract_best_configs(model_results, verbose=verbose)
 
+    # for i in subset_summary:
+    #     print(i)
+    formatted_subsets = [format_subset_result(result) for result in subset_summary]
+
+    if window_length is not None:
+        sheet_name = f"Subset Summary {window_length:.3g}h"
+    else:
+        sheet_name = "Subset Summary"
+
+    write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
+
     return best_configs
 
 
 
 if __name__ == '__main__':
+
     
     compare_input_data_configurations(
         features=[
@@ -422,8 +475,10 @@ if __name__ == '__main__':
         resistances_all = [0.1, 1, 3],
         # resistances_all = [1],
         years_all = [2024, 2025],
+        wb=work_book,
         # years_all = [2024],#, 2025],
-        models = [Ridge, XGBRegressor],
+        # models = [Ridge, XGBRegressor],
+        models = [Ridge],
         model_params= [ridge_params, xgb_params],
         scale_model_features=[True, False],
         verbose=False
