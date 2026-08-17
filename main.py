@@ -150,9 +150,10 @@ def main():
         # Create worksheet
         ws = wb.create_sheet(title=sheet_name)
         # Column headings
-        ws.append([
-            "Window Length (h)",
+        ws.append([            
             "Model",
+            "Window Length (h)",
+            "N samples"
             "MFC Types",
             "Resistances (kOhm)",
             "Years",
@@ -178,7 +179,7 @@ def main():
             print("R²:", round(best_config["r2"], 3))
             print("MAE:", round(best_config["mae"], 3))
             # print("Alpha:", best_config["alpha"]),
-            # print("N Samples:", res["n_samples"])
+            print("N Samples:", best_config["n_samples"])
             # print("Terms:", "v_peak, p_peak, energy, resistance")
             print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in best_config["parameters"].items())),
             # print("N Samples:", res["n_samples"])
@@ -196,8 +197,9 @@ def main():
 
             # Save data to excel
             ws.append([
-                round(best_config["window_length"], 3),
                 best_config["model"],
+                round(best_config["window_length"], 3),
+                best_config["n_samples"],
                 ", ".join(mfc_types_regex_mappings[p] for p in best_config["mfc_types"]),
                 ", ".join(map(str, best_config["resistances"])),
                 ", ".join(map(str, best_config["years"])),
@@ -254,7 +256,7 @@ def main():
         # # plt.show()
         plt.close()
 
-    # Save workbook
+    # Save workbook to excel file
     wb.save("model_performance.xlsx")
             
     # plt.savefig(f"figs/all_v2_Ridge-R2.png", bbox_inches="tight")

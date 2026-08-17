@@ -221,7 +221,7 @@ def extract_best_configs(model_results, verbose=True):
                 print("MAE:", round(res["mae"], 3))
                 # print("Alpha:", res["alpha"]),
                 print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
-                # print("N Samples:", res["n_samples"])
+                print("N Samples:", res["n_samples"])
                 # print("Terms:", "v_peak, p_peak, energy, resistance")
                 print("Terms:", res["features"])
                 if "coefficients" in res:
@@ -245,7 +245,8 @@ def compare_input_data_configurations(features,
                                     models = [Ridge, XGBRegressor],
                                     model_params = [ridge_params, xgb_params],
                                     scale_model_features=[True, False],
-                                   min_data_points=25,
+                                #    min_data_points=25,
+                                target_data_points = 25,
                                    verbose=True):
     
     # Variables to store results of data combinations that give best performance 
@@ -261,6 +262,9 @@ def compare_input_data_configurations(features,
     first_feature = next(iter(mfc_features))
     mfc_names = mfc_features[first_feature].keys()
 
+    # Summary of which subsets were used in the comparison
+    subset_summary = []
+
     # Generate all possble subset combinations of MFCs, resistance values and year section of data (2024/2025)
     for subset_mfc_types, subset_resistances, subset_years in itertools.product( all_subsets(mfc_types_all),
                                                                                  all_subsets(resistances_all),
@@ -272,7 +276,7 @@ def compare_input_data_configurations(features,
         
 
         # Flag to determine whether results of this subset are saved
-        skip_subset = False
+        contains_combination_with_zero_data = False
 
         # Data structure to hold data filtered to contain only this subset
         subset_data = {k : [] for k in mfc_features}
@@ -289,12 +293,20 @@ def compare_input_data_configurations(features,
                         filtered_feature = filter_feature_data(mfc_features, key, col, year, resistance)
                         subset_data[key].extend(filtered_feature)
 
-                        # Reject any combinations within the subset with zero data points. 
+                        # Detect MFC/resistance/year combinations with zero data points 
                         if len(filtered_feature) == 0:
-                            skip_configuration = True
+                            contains_combination_with_zero_data = True
 
-        # Reject any combinations within the subset with zero data points. The remaining subset is captured elsewhere
-        if skip_configuration == True:
+        n_data_points = len(subset_data[labels[0]])
+
+        # Skip subsets containing MFC/resistance/year combinations with zero data points
+        if contains_combination_with_zero_data == True:
+
+            subset_summary.append({'subset': subset,
+                                    'n_data_points': n_data_points,
+                                    'included': False,
+                                    'reason': 'Missing MFC/resistance/year combination'
+                                    })
             if verbose==True:
                 print('Skip config (redundant mfc type/resistance/year in config)', 
                       subset_mfc_types, subset_resistances, subset_years)
@@ -302,17 +314,63 @@ def compare_input_data_configurations(features,
         # If the subset hasn't been rejected
         else:
 
-            # Drop any subsets with insufficient data
-            if len(configuration_data[labels[0]]) < min_data_points:
-                if verbose==True:
-                    print('Skip config (number of data points below threshold)', configuration['subset_mfc_types'],
-                        configuration['subset_resistances'],
-                        configuration['subset_years'])
+            # # Drop subsets with insufficient data
+            # if len(configuration_data[labels[0]]) < min_data_points:
+            #     if verbose==True:
+            #         print('Skip config (number of data points below threshold)', 
+            #                 configuration['subset_mfc_types'],
+            #                 configuration['subset_resistances'],
+            #             c   onfiguration['subset_years'])
+            #     continue
+
+            # n_data_points = len(subset_data[labels[0]])
+
+
+            # Skip subsets with insufficient data
+            if n_data_points < target_data_points:
+                subset_summary.append({
+                                'subset': subset,
+                                'n_data_points': n_data_points,
+                                'included': False,
+                                'reason': 'Too few data points'
+                            })
+                
+                if verbose:
+                    print(
+                        'Skip config (not enough data points)',
+                        subset['subset_mfc_types'],
+                        subset['subset_resistances'],
+                        subset['subset_years'],
+                        n_data_points
+                    )
                 continue
+            
+            # *************
+            # # Randomly downsample larger subset data sets to target number of data points 
+            # random_number_generator = np.random.default_rng(42)
+
+            # selected_indices = random_number_generator.choice(
+            #                             n_data_points,
+            #                             size=target_data_points,
+            #                             replace=False # Repeat indices not allowed
+            #                         )
+
+            # configuration_data = {
+            #     key: [values[i] for i in selected_indices]
+            #     for key, values in subset_data.items()
+            # }
+            # *************
+
+            subset_summary.append({
+                            'subset': subset,
+                            'n_data_points': n_data_points,
+                            'included': True,
+                            'reason': ''
+                        })
 
             # Create train and test data
             X_train, X_test, y_train, y_test = prepare_model_data(
-                        configuration_data, 
+                        subset_data, 
                         labels=['COD'],
                         features=features,
                         test_size=0.2
@@ -328,7 +386,7 @@ def compare_input_data_configurations(features,
                             X_test, 
                             y_train, 
                             y_test, 
-                            configuration, 
+                            subset, 
                             results=results, 
                             model_class=model_class, 
                             param_grid=params,
@@ -337,8 +395,7 @@ def compare_input_data_configurations(features,
                             verbose=verbose)               
 
     # Extract the best configurations for each model
-    best_configs = extract_best_configs(model_results,
-                                    verbose=verbose)
+    best_configs = extract_best_configs(model_results, verbose=verbose)
 
     return best_configs
 
