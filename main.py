@@ -100,7 +100,7 @@ def main():
 
     # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
     window_lengths = [1/3, 1/2, 1, 2, 3]
-    window_lengths = [1/3, 1/2, 1]
+    # window_lengths = [1/3, 1/2, 1]
 
     for features in feature_sets:
 
@@ -246,7 +246,7 @@ def main():
         plt.close()
 
     # Save workbook to excel file
-    wb.save("model_performance_.xlsx")
+    wb.save("model_performance.xlsx")
             
     # plt.savefig(f"figs/all_v2_Ridge-R2.png", bbox_inches="tight")
     # # plt.show()

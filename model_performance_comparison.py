@@ -350,7 +350,23 @@ def compare_input_data_configurations(features,
                         if len(filtered_feature) == 0:
                             contains_combination_with_zero_data = True
 
+        # # Remove NaNs before counting/downsampling
+        # df_subset = pd.DataFrame(subset_data)
+        # df_subset = df_subset.apply(pd.to_numeric, errors='coerce')
+        # df_subset = df_subset.dropna()
+        # # Convert back to dictionary of lists
+        # subset_data = df_subset.to_dict(orient='list')
+
+        # Number of observations in this subset (hint: labels is a list containing one value)
         n_data_points = len(subset_data[labels[0]])
+
+        # # Remove rows containing NaNs before counting/downsampling
+        # df_subset = pd.DataFrame(subset_data)
+        # df_subset = df_subset.apply(pd.to_numeric, errors='coerce')
+        # df_subset = df_subset.dropna()
+        # # Convert back to dictionary of lists
+        # subset_data = df_subset.to_dict(orient='list')
+        # n_data_points = len(df_subset)
 
         # Skip subsets containing MFC/resistance/year combinations with zero data points
         if contains_combination_with_zero_data == True:
@@ -387,19 +403,19 @@ def compare_input_data_configurations(features,
                 continue
             
             # *************
-            # # Randomly downsample larger subset data sets to target number of data points 
-            # random_number_generator = np.random.default_rng(42)
+            # Randomly downsample larger subset data sets to target number of data points 
+            random_number_generator = np.random.default_rng(42)
 
-            # selected_indices = random_number_generator.choice(
-            #                             n_data_points,
-            #                             size=target_data_points,
-            #                             replace=False # Repeat indices not allowed
-            #                         )
+            selected_indices = random_number_generator.choice(
+                                        n_data_points,
+                                        size=target_data_points,
+                                        replace=False # Repeat indices not allowed
+                                    )
 
-            # configuration_data = {
-            #     key: [values[i] for i in selected_indices]
-            #     for key, values in subset_data.items()
-            # }
+            subset_data = {
+                key: [values[i] for i in selected_indices]
+                for key, values in subset_data.items()
+            }
             # *************
 
             subset_summary.append({
