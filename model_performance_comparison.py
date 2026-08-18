@@ -93,7 +93,7 @@ def filter_feature_data(data, sheet_name, col_name, year, resistance):
     return feature
 
 
-def all_subsets(lst):
+def all_combinations(lst):
     return [
         list(combo)
         for r in range(1, len(lst) + 1)
@@ -295,119 +295,132 @@ def compare_input_data_configurations(features,
                                     scale_model_features=[True, False],
                                 #    min_data_points=25,
                                 target_data_points = 25,
+                                test_combinations = True,
                                    verbose=True,
                                    window_length=None):
     
-    # Variables to store results of data combinations that give best performance 
-    # results_ridge = []
-    # results_xgboost = []
+    # Summary of which subsets of input data were compared
+    subset_summary = []
+
+    # Results of data combinations that give best performance 
     model_results = [[] for m in models] 
     
     # Get stored feature data
     with open('mfc_features.pkl', 'rb') as f:
         mfc_features = pickle.load(f)
 
-    # Get the column / mfc names from the first dictionary in the nested dictionary of fetaures
+    # print(type(mfc_features))
+    # for i in list(mfc_features)[:2]:
+    #     print(i)
+    #     print(mfc_features[i])
+
+    # Get mfc names from the column headings for the first feature in the imported data
     first_feature = next(iter(mfc_features))
     mfc_names = mfc_features[first_feature].keys()
 
-    # Summary of which subsets were used in the comparison
-    subset_summary = []
+    if test_combinations:
+        # Test every possible combination of MFCs/resistances/years
+        subsets = itertools.product(
+            all_combinations(mfc_types_all),
+            all_combinations(resistances_all),
+            all_combinations(years_all)
+        )
 
-    # Generate all possble subset combinations of MFCs, resistance values and year section of data (2024/2025)
-    for subset_mfc_types, subset_resistances, subset_years in itertools.product( all_subsets(mfc_types_all),
-                                                                                 all_subsets(resistances_all),
-                                                                                 all_subsets(years_all)):
-        # print(subset_mfc_types, subset_resistances, subset_years)
-        subset = {'subset_mfc_types': subset_mfc_types,
-                         'subset_resistances': subset_resistances,
-                         'subset_years':subset_years}
-        
+    else:
+        # Test only single MFC × resistance × year combinations
+        subsets = itertools.product(
+            mfc_types_all,
+            resistances_all,
+            years_all
+        )
+
+    for subset_mfc_types, subset_resistances, subset_years in subsets:
+
+        # If using single MFC × resistance × year combinations, convert them to lists
+        if not test_combinations:
+            subset_mfc_types = [subset_mfc_types]
+            subset_resistances = [subset_resistances]
+            subset_years = [subset_years]
+
+        subset = {
+            'subset_mfc_types': subset_mfc_types,
+            'subset_resistances': subset_resistances,
+            'subset_years': subset_years
+        }
+
+        print('Subset:', subset)
 
         # Flag to determine whether results of this subset are saved
         contains_combination_with_zero_data = False
 
-        # Data structure to hold data filtered to contain only this subset
+        # Copy feature names to new empty data structure to hold aggregated filtered feature data
         subset_data = {k : [] for k in mfc_features}
 
-        # Filter MFC columns, skipping any that aren't in this subset
-        for col in mfc_names:
-            if not any(re.search(p, col) for p in subset_mfc_types):
+        # Skip MFC columns any that aren't in this subset
+        for name in mfc_names:
+            if not any(re.search(i, name) for i in subset['subset_mfc_types']):
                 continue
 
             # Filter feature data to include only years and resistances in current subset 
-            for year in subset_years:
-                for resistance in subset_resistances:
-                    for key in subset_data:
+            for year in subset['subset_years']:
+                for resistance in subset['subset_resistances']:
+                    for feature in subset_data:
                         filtered_feature = filter_feature_data(mfc_features, 
-                                                               key, 
-                                                               col, 
-                                                               year, 
-                                                               resistance)
-                        subset_data[key].extend(filtered_feature)
+                                                                feature, 
+                                                                name, 
+                                                                year, 
+                                                                resistance)
 
                         # Detect MFC/resistance/year combinations with zero data points 
                         if len(filtered_feature) == 0:
                             contains_combination_with_zero_data = True
+        
+                        # Extend feature data for this subset with filtered data
+                        subset_data[feature].extend(filtered_feature)
 
-        # # Remove NaNs before counting/downsampling
-        # df_subset = pd.DataFrame(subset_data)
-        # df_subset = df_subset.apply(pd.to_numeric, errors='coerce')
-        # df_subset = df_subset.dropna()
-        # # Convert back to dictionary of lists
-        # subset_data = df_subset.to_dict(orient='list')
+        # Remove rows containig NaNs from feature data for this subset 
+        df_subset = pd.DataFrame(subset_data)
 
-        # Number of observations in this subset (hint: labels is a list containing one value)
-        n_data_points = len(subset_data[labels[0]])
+        # Number of observations in this subset
+        for key in list(subset_data)[:1]:
+            n_observations_original = len(subset_data[key])
+            # print(n_observations_original)
 
-        # # Remove rows containing NaNs before counting/downsampling
-        # df_subset = pd.DataFrame(subset_data)
-        # df_subset = df_subset.apply(pd.to_numeric, errors='coerce')
-        # df_subset = df_subset.dropna()
-        # # Convert back to dictionary of lists
-        # subset_data = df_subset.to_dict(orient='list')
-        # n_data_points = len(df_subset)
+        # Drop rows where columns (excluding date-time and list data columns) contain NaN
+        df_subset = df_subset.dropna(subset=df_subset.columns[1:-2])
+        n_observations = len(df_subset)
+        # print(n_observations)
 
-        # Skip subsets containing MFC/resistance/year combinations with zero data points
+        # Convert back to dictionary of lists
+        subset_data = df_subset.to_dict(orient='list')
+
+        rejection_reason = ""
         if contains_combination_with_zero_data == True:
+            rejection_reason += "Missing MFC/resistance/year combination"
 
+        # Exclude subsets containing MFC/resistance/year combinations with zero data points from comparison
+        if n_observations < target_data_points:
+            rejection_reason += f", Too few data points {n_observations}, threshold = {target_data_points}"
+
+        # Exclude subsets containing too few observations from comparison
+        if (contains_combination_with_zero_data == True or 
+            n_observations < target_data_points):
             subset_summary.append({'subset': subset,
-                                    'n_data_points': n_data_points,
+                                    'n_data_points': n_observations,
                                     'included': False,
-                                    'reason': 'Missing MFC/resistance/year combination'
+                                    'reason': rejection_reason
                                     })
-            if verbose==True:
-                print('Skip config (redundant mfc type/resistance/year in config)', 
-                      subset_mfc_types, subset_resistances, subset_years)
-
-        # If the subset hasn't been rejected
-        else:
-
-            # Skip subsets with insufficient data
-            if n_data_points < target_data_points:
-                subset_summary.append({
-                                'subset': subset,
-                                'n_data_points': n_data_points,
-                                'included': False,
-                                'reason': f'Too few data points {n_data_points}, threshold = {target_data_points}'
-                            })
-                
-                if verbose:
-                    print(
-                        'Skip config (not enough data points)',
-                        subset['subset_mfc_types'],
-                        subset['subset_resistances'],
-                        subset['subset_years'],
-                        n_data_points
-                    )
-                continue
+        
+        else: 
+            print("Trainig model")
+            #  Train model on subset data 
             
             # *************
             # Randomly downsample larger subset data sets to target number of data points 
             random_number_generator = np.random.default_rng(42)
 
             selected_indices = random_number_generator.choice(
-                                        n_data_points,
+                                        n_observations,
                                         size=target_data_points,
                                         replace=False # Repeat indices not allowed
                                     )
@@ -420,7 +433,7 @@ def compare_input_data_configurations(features,
 
             subset_summary.append({
                             'subset': subset,
-                            'n_data_points': n_data_points,
+                            'n_data_points': n_observations,
                             'included': True,
                             'reason': ''
                         })
@@ -433,7 +446,8 @@ def compare_input_data_configurations(features,
                         test_size=0.2
                     ) 
 
-            # Evaulate all models 
+            # •••••••••••• Checked up to here 
+            # Evaulate all models for this subset
             for model_class, params, scale_features, results in zip(models, 
                                                   model_params, 
                                                   scale_model_features, 
@@ -471,7 +485,8 @@ def compare_input_data_configurations(features,
 
 if __name__ == '__main__':
 
-    
+    print("comparing")
+
     compare_input_data_configurations(
         features=[
             'Vpeak mV', 
@@ -493,9 +508,11 @@ if __name__ == '__main__':
         years_all = [2024, 2025],
         wb=work_book,
         # years_all = [2024],#, 2025],
-        # models = [Ridge, XGBRegressor],
-        models = [Ridge],
+        models = [Ridge, XGBRegressor],
+        target_data_points = 25,
+        # models = [Ridge],
         model_params= [ridge_params, xgb_params],
+        # test_combinations=False,
         scale_model_features=[True, False],
         verbose=False
     )
