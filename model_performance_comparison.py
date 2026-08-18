@@ -463,9 +463,10 @@ def compare_input_data_configurations(features,
         if contains_combination_with_zero_data == True:
             rejection_reason += "Missing MFC/resistance/year combination"
 
-        # Exclude subsets containing MFC/resistance/year combinations with zero data points from comparison
+        # Exclude subsets containing MFC/resistance/year combinations with zero data points
         if n_observations < target_data_points:
-            rejection_reason += f", Too few data points {n_observations}, threshold={target_data_points}"
+            rejection_reason += f", Too few data points {n_observations}, \
+            threshold={target_data_points}"
 
         # Exclude subsets containing too few observations from comparison
         if (contains_combination_with_zero_data == True or 
@@ -478,21 +479,10 @@ def compare_input_data_configurations(features,
         
         #  Prepare subset feature data for modelling 
         else: 
-            # Randomly downsample larger subset data sets to target number of data points 
+            # Randomly downsample larger subset data sets to target data points 
             subset_data = downsample_to_target(subset_data, 
                                                n_observations, 
                                                target_data_points)
-            # random_number_generator = np.random.default_rng(42)
-            # selected_indices = random_number_generator.choice(
-            #                             n_observations,
-            #                             size=target_data_points,
-            #                             replace=False # Repeat indices not allowed
-            #                         )
-
-            # subset_data = {
-            #     key: [values[i] for i in selected_indices]
-            #     for key, values in subset_data.items()
-            # }
 
             subset_summary.append({
                             'subset': subset,
@@ -520,7 +510,7 @@ def compare_input_data_configurations(features,
                 else:
                     scaler = None
 
-                # Tune hyperparameters and select optimal parameters and corresponding result
+                # Tune hyperparameters and get model result
                 result = optimise_hyperparameters(
                             X_train, 
                             X_test, 
@@ -544,6 +534,36 @@ def compare_input_data_configurations(features,
     formatted_subsets = [format_subset_result(result) for result in subset_summary]
     sheet_name = f"Subset Summary, target data points {target_data_points}"
     write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
+
+    # Store the results for each model for this window size 
+    for results, model in zip(model_results, models):
+
+        # # Array to store  R2 values for each window size for plotting 
+        # r2s = []
+
+        # Get model name
+        model_name = results[0]["model"]
+
+        # Format results as list of dictionaries, showing best result for each subset tested
+        formatted_results = [format_result(r, mfc_types_regex_mappings) for r in results]
+
+        # Create Excel worksheet with model name as the worksheet name
+        write_dicts_to_sheet(
+            wb,
+            model_name + f"Window length {window_length}",
+            formatted_results
+        )
+
+        # Print results
+        for row in formatted_results:
+            print(f"Window length {window_length}")
+            for key, value in row.items():
+                print(f"{key}: {value}")
+            print()
+
+    # Save workbook to excel file
+    wb.save("model_performance.xlsx")
+    
 
 
     # if window_length is not None:
