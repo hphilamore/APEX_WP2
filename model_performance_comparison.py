@@ -29,17 +29,13 @@ mfc_types_regex_mappings = {
         r"20\*30(?!\s*AC)": "20x30"     # match 20*30 NOT followed by AC
     }
 
+# Hyperparameter ranges to test for each model
 ridge_params = [
                 {"alpha": a}
                 for a in np.logspace(-4,4,100)
             ]
 
 xgb_params = []
-
-# for n_estimators in [100,300,500]:
-#     for max_depth in [2,3,5]:
-#         for learning_rate in [0.01,0.05,0.1]:
-
 for n_estimators in [30, 50, 100]:
     for max_depth in [2, 3, 4]:
         for learning_rate in [0.01,0.05,0.1]:
@@ -124,8 +120,42 @@ def prepare_model_data(model_data, labels, features, test_size):
 
     return X_train, X_test, y_train, y_test 
 
+def scale_model_features(X_train, X_test):
+    # Scale all features to mean 0, std 1, to retain feature importance 
+    # if scale_features:
+    scaler = StandardScaler()
+    X_train_model = scaler.fit_transform(X_train)
+    X_test_model = scaler.transform(X_test)
 
-def evaluate_model_performance(X_train, 
+    # else:
+    #     scaler = None
+    #     X_train_model = X_train
+    #     X_test_model = X_test
+
+    return X_train_model, X_test_model, scaler
+
+def downsample_to_target(subset_data,
+                         n_observations, 
+                         target_data_points):
+    """
+    TODO: Different random seed for each config
+    """
+    random_number_generator = np.random.default_rng(42)
+    selected_indices = random_number_generator.choice(
+                                n_observations,
+                                size=target_data_points,
+                                replace=False # Repeat indices not allowed
+                            )
+
+    subset_data = {
+        key: [values[i] for i in selected_indices]
+        for key, values in subset_data.items()
+    }
+
+    return subset_data
+
+
+def optimise_hyperparameters(X_train, 
                                X_test, 
                                y_train, 
                                y_test, 
@@ -134,21 +164,21 @@ def evaluate_model_performance(X_train,
                                model_class, 
                                param_grid,
                                features,  
-                               scale_features=False, 
+                               scaler, 
                                verbose=True):
     
 
-    print("Evaluating models...")
+    print("Evaluating models through hyperparameter grid search...")
 
-    # Scale all features to mean 0, std 1, to retain feature importance 
-    if scale_features:
-        scaler = StandardScaler()
-        X_train_model = scaler.fit_transform(X_train)
-        X_test_model = scaler.transform(X_test)
-    else:
-        scaler = None
-        X_train_model = X_train
-        X_test_model = X_test
+    # # Scale all features to mean 0, std 1, to retain feature importance 
+    # if scale_features:
+    #     scaler = StandardScaler()
+    #     X_train_model = scaler.fit_transform(X_train)
+    #     X_test_model = scaler.transform(X_test)
+    # else:
+    #     scaler = None
+    #     X_train_model = X_train
+    #     X_test_model = X_test
 
     # Store scores to compare performance using different hyperparameter combinations 
     param_gridsearch_results = []
@@ -161,12 +191,10 @@ def evaluate_model_performance(X_train,
         print(f"Evaluating {model}")
 
         # Train the model
-        # model.fit(X_train, y_train)
-        model.fit(X_train_model, y_train)
-
+        model.fit(X_train, y_train)
+   
         # Make predictions
-        # y_pred = model.predict(X_test)
-        y_pred = model.predict(X_test_model)
+        y_pred = model.predict(X_test)
 
         # Evaluate
         mse = mean_squared_error(y_test, y_pred)
@@ -187,7 +215,7 @@ def evaluate_model_performance(X_train,
             # "alpha": alpha,
             # "coefficients": model.coef_.copy(),
             # "intercept": model.intercept_,
-            # "feature_scales": scaler.scale_.copy(),
+            "feature_scales": scaler if scaler==None else scaler.scale_.copy(),
             "n_samples": len(y_train) + len(y_pred)
             }
         
@@ -206,17 +234,53 @@ def evaluate_model_performance(X_train,
         
         param_gridsearch_results.append(param_result)
 
-        
-    # Sort results by R² descending
+    # Sort paramteter grid search results by R² descending
     param_gridsearch_sorted = sorted(param_gridsearch_results, key=lambda x: x["r2"], reverse=True)
 
     if verbose==True:
         print('Keep config', configuration['subset_mfc_types'],
                 configuration['subset_resistances'],
                 configuration['subset_years'])
-    
-    # Store the best value for this configuration with hyperparameter tuning 
-    results.append(param_gridsearch_sorted[0])
+
+    # # Store the best value for this configuration with hyperparameter tuning 
+    # results.append(param_gridsearch_sorted[0])
+
+    # Return the best value for this configuration with hyperparameter tuning 
+    best_gridsearch_result = param_gridsearch_sorted[0]
+    return best_gridsearch_result
+
+def format_result(result, mfc_types_regex_mappings):
+    """Format a model result for printing and Excel."""
+
+    return {
+        # "Model": result["model"],
+        # "Window Length (h)": round(result["window_length"], 3),
+        "N Samples": result["n_samples"],
+        "MFC Types": ", ".join(
+            mfc_types_regex_mappings[p]
+            for p in result["mfc_types"]
+        ),
+        "Resistances (kOhm)": ", ".join(
+            map(str, result["resistances"])
+        ),
+        "Years": ", ".join(
+            map(str, result["years"])
+        ),
+        "R²": round(result["r2"], 3),
+        "MAE": round(result["mae"], 3),
+        "Model Parameters": ", ".join(
+            f"{k}: {v:.3f}"
+            for k, v in result["parameters"].items()
+        ),
+        "Terms": ", ".join(result["features"]),
+        "Coefficients": ", ".join(
+            map(str, result.get("coefficients", []))
+        ),
+        "Intercept": result.get("intercept", ""),
+        "Feature Importances": ", ".join(
+            map(str, result.get("feature_importances", []))
+        ),
+    }
 
 
 def extract_best_configs(model_results, verbose=True):
@@ -292,7 +356,7 @@ def compare_input_data_configurations(features,
                                 wb,
                                     models = [Ridge, XGBRegressor],
                                     model_params = [ridge_params, xgb_params],
-                                    scale_model_features=[True, False],
+                                    scale_features=[True, False],
                                 #    min_data_points=25,
                                 target_data_points = 25,
                                 test_combinations = True,
@@ -318,22 +382,23 @@ def compare_input_data_configurations(features,
     first_feature = next(iter(mfc_features))
     mfc_names = mfc_features[first_feature].keys()
 
+    # Test every possible combination of MFCs/resistances/years
     if test_combinations:
-        # Test every possible combination of MFCs/resistances/years
         subsets = itertools.product(
             all_combinations(mfc_types_all),
             all_combinations(resistances_all),
             all_combinations(years_all)
         )
 
+    # Test only single MFC × resistance × year combinations
     else:
-        # Test only single MFC × resistance × year combinations
         subsets = itertools.product(
             mfc_types_all,
             resistances_all,
             years_all
         )
 
+    # Find model solution for each subset
     for subset_mfc_types, subset_resistances, subset_years in subsets:
 
         # If using single MFC × resistance × year combinations, convert them to lists
@@ -400,7 +465,7 @@ def compare_input_data_configurations(features,
 
         # Exclude subsets containing MFC/resistance/year combinations with zero data points from comparison
         if n_observations < target_data_points:
-            rejection_reason += f", Too few data points {n_observations}, threshold = {target_data_points}"
+            rejection_reason += f", Too few data points {n_observations}, threshold={target_data_points}"
 
         # Exclude subsets containing too few observations from comparison
         if (contains_combination_with_zero_data == True or 
@@ -411,25 +476,23 @@ def compare_input_data_configurations(features,
                                     'reason': rejection_reason
                                     })
         
+        #  Prepare subset feature data for modelling 
         else: 
-            print("Trainig model")
-            #  Train model on subset data 
-            
-            # *************
             # Randomly downsample larger subset data sets to target number of data points 
-            random_number_generator = np.random.default_rng(42)
+            subset_data = downsample_to_target(subset_data, 
+                                               n_observations, 
+                                               target_data_points)
+            # random_number_generator = np.random.default_rng(42)
+            # selected_indices = random_number_generator.choice(
+            #                             n_observations,
+            #                             size=target_data_points,
+            #                             replace=False # Repeat indices not allowed
+            #                         )
 
-            selected_indices = random_number_generator.choice(
-                                        n_observations,
-                                        size=target_data_points,
-                                        replace=False # Repeat indices not allowed
-                                    )
-
-            subset_data = {
-                key: [values[i] for i in selected_indices]
-                for key, values in subset_data.items()
-            }
-            # *************
+            # subset_data = {
+            #     key: [values[i] for i in selected_indices]
+            #     for key, values in subset_data.items()
+            # }
 
             subset_summary.append({
                             'subset': subset,
@@ -446,13 +509,19 @@ def compare_input_data_configurations(features,
                         test_size=0.2
                     ) 
 
-            # •••••••••••• Checked up to here 
-            # Evaulate all models for this subset
-            for model_class, params, scale_features, results in zip(models, 
-                                                  model_params, 
-                                                  scale_model_features, 
-                                                  model_results):
-                evaluate_model_performance(
+            for model_class, params, scale, results in zip(models, 
+                                                           model_params, 
+                                                           scale_features, 
+                                                           model_results):
+
+                # Scale model features 
+                if scale:
+                    X_train, X_test, scaler = scale_model_features(X_train, X_test)
+                else:
+                    scaler = None
+
+                # Tune hyperparameters and select optimal parameters and corresponding result
+                result = optimise_hyperparameters(
                             X_train, 
                             X_test, 
                             y_train, 
@@ -462,26 +531,31 @@ def compare_input_data_configurations(features,
                             model_class=model_class, 
                             param_grid=params,
                             features=features,
-                            scale_features=scale_features,
-                            verbose=verbose)               
+                            scaler=scaler,
+                            verbose=verbose)    
 
-    # Extract the best configurations for each model
-    best_configs = extract_best_configs(model_results, verbose=verbose)
+                # Store result for this input data subset and window length
+                results.append(result)
 
-    # for i in subset_summary:
-    #     print(i)
+                format_result(result, mfc_types_regex_mappings)
+
+                           
+    # Store which subsets were included/excluded and reason as excel sheet
     formatted_subsets = [format_subset_result(result) for result in subset_summary]
-
-    if window_length is not None:
-        sheet_name = f"Subset Summary {window_length:.3g}h"
-    else:
-        sheet_name = "Subset Summary"
-
+    sheet_name = f"Subset Summary, target data points {target_data_points}"
     write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
 
-    return best_configs
 
+    # if window_length is not None:
+    #     sheet_name = f"Subset Summary {window_length:.3g}h"
+    # else:
+    #     sheet_name = "Subset Summary"
 
+    
+
+    # # Extract the best configurations for each model
+    # best_configs = extract_best_configs(model_results, verbose=verbose)
+    # return best_configs
 
 if __name__ == '__main__':
 
@@ -513,7 +587,7 @@ if __name__ == '__main__':
         # models = [Ridge],
         model_params= [ridge_params, xgb_params],
         # test_combinations=False,
-        scale_model_features=[True, False],
+        scale_features=[True, False],
         verbose=False
     )
 
