@@ -170,16 +170,6 @@ def optimise_hyperparameters(X_train,
 
     print("Evaluating models through hyperparameter grid search...")
 
-    # # Scale all features to mean 0, std 1, to retain feature importance 
-    # if scale_features:
-    #     scaler = StandardScaler()
-    #     X_train_model = scaler.fit_transform(X_train)
-    #     X_test_model = scaler.transform(X_test)
-    # else:
-    #     scaler = None
-    #     X_train_model = X_train
-    #     X_test_model = X_test
-
     # Store scores to compare performance using different hyperparameter combinations 
     param_gridsearch_results = []
 
@@ -216,7 +206,9 @@ def optimise_hyperparameters(X_train,
             # "coefficients": model.coef_.copy(),
             # "intercept": model.intercept_,
             "feature_scales": scaler if scaler==None else scaler.scale_.copy(),
-            "n_samples": len(y_train) + len(y_pred)
+            "n_samples": len(y_train) + len(y_pred),
+            "unique_y_train": np.unique(y_train).astype(int).tolist(),
+            "unique_y_test": np.unique(y_test).astype(int).tolist()
             }
         
         # Store model-specific information
@@ -266,6 +258,12 @@ def format_result(result, mfc_types_regex_mappings):
         "Years": ", ".join(
             map(str, result["years"])
         ),
+        "Unique y train": ", ".join(
+            map(str, result.get("unique_y_train", []))
+        ),
+        "Unique y test": ", ".join(
+            map(str, result.get("unique_y_test", []))
+        ),
         "R²": round(result["r2"], 3),
         "MAE": round(result["mae"], 3),
         "Model Parameters": ", ".join(
@@ -283,55 +281,55 @@ def format_result(result, mfc_types_regex_mappings):
     }
 
 
-def extract_best_configs(model_results, verbose=True):
+# def extract_best_configs(model_results, verbose=True):
 
-    best_configs = []
+#     best_configs = []
 
-    # for results in [results_ridge, results_xgboost]:
-    for results in model_results:
+#     # for results in [results_ridge, results_xgboost]:
+#     for results in model_results:
 
-        # print('Results', results)
+#         # print('Results', results)
 
-        # Sort results by R² descending
-        results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
+#         # Sort results by R² descending
+#         results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
 
-        # Store the result that gives the highest R2 value
-        best_configs.append(results_sorted[0])
+#         # Store the result that gives the highest R2 value
+#         best_configs.append(results_sorted[0])
 
-        # print('Num results', len(results_sorted))
+#         # print('Num results', len(results_sorted))
 
-        # Show top 3 configurations 
-        top_3 = results_sorted[:3]
-        if verbose == True:
+#         # Show top 3 configurations 
+#         top_3 = results_sorted[:3]
+#         if verbose == True:
 
-            print("\nTop 3 configurations:\n")
-            for i, res in enumerate(top_3, 1):
+#             print("\nTop 3 configurations:\n")
+#             for i, res in enumerate(top_3, 1):
 
-                print(f"--- Rank {i} ---")
-                print()
-                print("Model:", res["model"])
-                print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-                # print("MFC types:", res["mfc_types"])
-                print("Resistances kOhm:", res["resistances"])
-                print("Years:", res["years"])
-                print("R²:", round(res["r2"], 3))
-                print("MSE:", round(res["mse"], 3))
-                print("MAE:", round(res["mae"], 3))
-                # print("Alpha:", res["alpha"]),
-                print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
-                print("N Samples:", res["n_samples"])
-                # print("Terms:", "v_peak, p_peak, energy, resistance")
-                print("Terms:", res["features"])
-                if "coefficients" in res:
-                    print("Coefficients:", res["coefficients"])
-                if "intercept" in res:
-                    print("Intercept:", res["intercept"])
-                if "feature_importances" in res:
-                    print("Feature Importances:", res["feature_importances"])
-                # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-                # print("Intercept:", res["intercept"])
-                print()
-    return best_configs
+#                 print(f"--- Rank {i} ---")
+#                 print()
+#                 print("Model:", res["model"])
+#                 print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
+#                 # print("MFC types:", res["mfc_types"])
+#                 print("Resistances kOhm:", res["resistances"])
+#                 print("Years:", res["years"])
+#                 print("R²:", round(res["r2"], 3))
+#                 print("MSE:", round(res["mse"], 3))
+#                 print("MAE:", round(res["mae"], 3))
+#                 # print("Alpha:", res["alpha"]),
+#                 print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
+#                 print("N Samples:", res["n_samples"])
+#                 # print("Terms:", "v_peak, p_peak, energy, resistance")
+#                 print("Terms:", res["features"])
+#                 if "coefficients" in res:
+#                     print("Coefficients:", res["coefficients"])
+#                 if "intercept" in res:
+#                     print("Intercept:", res["intercept"])
+#                 if "feature_importances" in res:
+#                     print("Feature Importances:", res["feature_importances"])
+#                 # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
+#                 # print("Intercept:", res["intercept"])
+#                 print()
+#     return best_configs
 
 
 def format_subset_result(result):
@@ -358,8 +356,9 @@ def compare_input_data_configurations(features,
                                     model_params = [ridge_params, xgb_params],
                                     scale_features=[True, False],
                                 #    min_data_points=25,
-                                target_data_points = 25,
-                                test_combinations = True,
+                                target_data_points = 25, # smallest acceptable number of data points 
+                                downsample=True, # if True caps number of data points at target size
+                                test_combinations = True, # if False test only single MFC × resistance × year combinations
                                    verbose=True,
                                    window_length=None):
     
@@ -479,10 +478,11 @@ def compare_input_data_configurations(features,
         
         #  Prepare subset feature data for modelling 
         else: 
-            # Randomly downsample larger subset data sets to target data points 
-            subset_data = downsample_to_target(subset_data, 
-                                               n_observations, 
-                                               target_data_points)
+            if downsample:
+                # Randomly downsample larger subset data sets to target data points 
+                subset_data = downsample_to_target(subset_data, 
+                                                n_observations, 
+                                                target_data_points)
 
             subset_summary.append({
                             'subset': subset,
@@ -529,10 +529,13 @@ def compare_input_data_configurations(features,
 
                 format_result(result, mfc_types_regex_mappings)
 
-                           
+    # Trim widnow length values to compact floating point representations                       
+    if window_length is not None:
+        window_length = round(window_length, 3)
+
     # Store which subsets were included/excluded and reason as excel sheet
     formatted_subsets = [format_subset_result(result) for result in subset_summary]
-    sheet_name = f"Subset Summary, target data points {target_data_points}"
+    sheet_name = f"Subsets, Window={window_length}"
     write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
 
     # Store the results for each model for this window size 
@@ -550,8 +553,8 @@ def compare_input_data_configurations(features,
         # Create Excel worksheet with model name as the worksheet name
         write_dicts_to_sheet(
             wb,
-            model_name + f"Window length {window_length}",
-            formatted_results
+            sheet_name = f"{model_name} results, Window={window_length}",
+            rows=formatted_results
         )
 
         # Print results
@@ -563,6 +566,8 @@ def compare_input_data_configurations(features,
 
     # Save workbook to excel file
     wb.save("model_performance.xlsx")
+
+    return results
     
 
 
@@ -581,7 +586,7 @@ if __name__ == '__main__':
 
     print("comparing")
 
-    compare_input_data_configurations(
+    results = compare_input_data_configurations(
         features=[
             'Vpeak mV', 
             'Ppeak W', 
@@ -602,11 +607,13 @@ if __name__ == '__main__':
         years_all = [2024, 2025],
         wb=work_book,
         # years_all = [2024],#, 2025],
-        models = [Ridge, XGBRegressor],
+        # models = [Ridge, XGBRegressor],
+        models=[Ridge],
         target_data_points = 25,
-        # models = [Ridge],
+        # target_data_points=5,
         model_params= [ridge_params, xgb_params],
         # test_combinations=False,
+        # downsample=False
         scale_features=[True, False],
         verbose=False
     )
