@@ -23,9 +23,12 @@ feature_set = [
                     ]
 
 # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
-window_lengths = [1/3, 1/2, 1, 2, 3]
+# Window lengths in hours
+window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3]
 
-def plot_data(model, excel_file="model_performance.xlsx"):
+def plot_data(model, 
+              excel_file="model_performance.xlsx",
+              performance_metric="R²"):
 
     model_name = model.__name__
 
@@ -42,19 +45,19 @@ def plot_data(model, excel_file="model_performance.xlsx"):
     for sheet_name, df in all_sheets.items():
 
         # Only use sheets belonging to this model
-        if not sheet_name.startswith(f"{model_name} results"):
+        if not sheet_name.startswith(f"{model_name}"):
             continue
 
-        else:
-            print(sheet_name)
+        # else:
+        #     print(sheet_name)
 
         # Extract window size from sheet name
-        # e.g. "Ridge results, Window=0.333"
+        # e.g. "Ridge, Window=0.333"
         window_size = float(
             sheet_name.split("Window=")[1]
         )
 
-        print(window_size)
+        # print(window_size)
 
         # Process each row
         for _, row in df.iterrows():
@@ -62,7 +65,8 @@ def plot_data(model, excel_file="model_performance.xlsx"):
             mfc_type = row["MFC Types"]
             resistance = row["Resistances (kOhm)"]
             year = row["Years"]
-            r2 = row["R²"]
+            # r2 = row["R²"]
+            result = row[performance_metric]
 
             # Name of this data series
             series_name = (
@@ -75,14 +79,15 @@ def plot_data(model, excel_file="model_performance.xlsx"):
             if series_name not in results:
                 results[series_name] = {
                     "window": [],
-                    "r2": []
+                    # "r2": []
+                    "result": []
                 }
 
             # Store result from this sheet to data series
             results[series_name]["window"].append(window_size)
-            results[series_name]["r2"].append(r2)
+            results[series_name]["result"].append(result)
 
-    # Find a set of configurations that are in the top 4 for any window size
+    # Find a set of configurations that are the best performing for any window size
     top_configurations = set()
 
     # Get all widnow sizes tested
@@ -99,12 +104,14 @@ def plot_data(model, excel_file="model_performance.xlsx"):
 
             if window_size in values["window"]:
                 index = values["window"].index(window_size)
-                r2 = values["r2"][index]
+                result = values["result"][index]
 
-                window_results.append((series_name, r2))
+                window_results.append((series_name, result))
 
-        # Sort by R2 and take the best 4
-        n_configs = 3
+        # Sort by R2 and take the best config
+        reverse = True if performance_metric == "R²" else False
+
+        n_configs = 1
         top_configs = sorted(
             window_results,
             key=lambda x: x[1],
@@ -113,7 +120,7 @@ def plot_data(model, excel_file="model_performance.xlsx"):
 
         # Add these configurations to the set
         top_configurations.update(
-            series_name for series_name, r2 in top_configs
+            series_name for series_name, result in top_configs
         )
 
     # Filter results excluding those that are not in the set of top configurations
@@ -132,23 +139,27 @@ def plot_data(model, excel_file="model_performance.xlsx"):
 
         # Sort by window size so lines are drawn in the correct order
         sorted_values = sorted(
-            zip(values["window"], values["r2"])
+            zip(values["window"], values["result"])
         )
 
-        windows, r2_values = zip(*sorted_values)
+        windows, result_values = zip(*sorted_values)
 
         plt.plot(
             windows,
-            r2_values,
+            result_values,
             marker="o",
             label=series_name,
             color=colour
         )
 
-    plt.ylim(-1, 1)
+    if performance_metric == "R²":
+        plt.ylim(-1, 1)
+    else:
+        plt.ylim(0, 1000)
+
     plt.xlabel("Window size (hours)")
-    plt.ylabel("$R^2$")
-    plot_title = f"$R^2$ vs Window Size — {model_name}"
+    plt.ylabel(performance_metric)
+    plot_title = f"{performance_metric} vs Window Size — {model_name}"
     plt.title(plot_title)
 
     plt.legend(
@@ -171,9 +182,9 @@ def main():
     for i, window_length in enumerate(window_lengths):
     # for window_length in [18]:
 
-        # Values for formatting plotted data
-        cmap = plt.colormaps["viridis"]
-        n = len(window_lengths)
+        # # Values for formatting plotted data
+        # cmap = plt.colormaps["viridis"]
+        # n = len(window_lengths)
 
         # Extract features for windows of the specified length 
         extract_and_store_features(input_file_path="all_data.pkl",
@@ -197,7 +208,7 @@ def main():
         
         # Get results for each subset tested for this window size and engineered features
         # best_configs = compare_input_data_configurations(
-        results =     compare_input_data_configurations(
+        results = compare_input_data_configurations(
         features=feature_set,
         labels=['COD'],
         mfc_types_all = [
@@ -225,7 +236,10 @@ def main():
 
     # Plot the data for each mdoel tested 
     for model in models:
-        plot_data(model, excel_file="model_performance.xlsx")
+        for metric in ["R²", "MAE"]:
+            plot_data(model, 
+                    excel_file="model_performance.xlsx",
+                    performance_metric=metric)
 
 if __name__ == "__main__":
     main()

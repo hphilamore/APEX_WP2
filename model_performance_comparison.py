@@ -22,6 +22,8 @@ work_book = Workbook()
 # Remove the default empty sheet
 work_book.remove(work_book.active)
 
+
+
 mfc_types_regex_mappings = {
         r"10\*10\s*AC": "10x10_AC",
         r"20\*30\s*AC": "20x30_AC",
@@ -50,12 +52,6 @@ for n_estimators in [30, 50, 100]:
 def write_dicts_to_sheet(wb, sheet_name, rows):
     """Write a list of dictionaries to a new Excel worksheet."""
 
-    # # Create a new workbook
-    # wb = Workbook()
-
-    # # Remove the default empty sheet
-    # wb.remove(wb.active)
-
     ws = wb.create_sheet(title=sheet_name)
 
     # Column headings
@@ -65,10 +61,6 @@ def write_dicts_to_sheet(wb, sheet_name, rows):
     for row in rows:
         ws.append(list(row.values()))
 
-    # # Save workbook to excel file
-    # wb.save("model_performance.xlsx")
-
-    # return ws
 
 def filter_feature_data(data, sheet_name, col_name, year, resistance):
 
@@ -122,15 +114,9 @@ def prepare_model_data(model_data, labels, features, test_size):
 
 def scale_model_features(X_train, X_test):
     # Scale all features to mean 0, std 1, to retain feature importance 
-    # if scale_features:
     scaler = StandardScaler()
     X_train_model = scaler.fit_transform(X_train)
     X_test_model = scaler.transform(X_test)
-
-    # else:
-    #     scaler = None
-    #     X_train_model = X_train
-    #     X_test_model = X_test
 
     return X_train_model, X_test_model, scaler
 
@@ -168,7 +154,7 @@ def optimise_hyperparameters(X_train,
                                verbose=True):
     
 
-    print("Evaluating models through hyperparameter grid search...")
+    # print("Evaluating models through hyperparameter grid search...")
 
     # Store scores to compare performance using different hyperparameter combinations 
     param_gridsearch_results = []
@@ -178,7 +164,7 @@ def optimise_hyperparameters(X_train,
 
         model = model_class(**params)
 
-        print(f"Evaluating {model}")
+        # print(f"Evaluating {model}")
 
         # Train the model
         model.fit(X_train, y_train)
@@ -383,19 +369,24 @@ def compare_input_data_configurations(features,
 
     # Test every possible combination of MFCs/resistances/years
     if test_combinations:
-        subsets = itertools.product(
+        subsets = list(itertools.product(
             all_combinations(mfc_types_all),
             all_combinations(resistances_all),
             all_combinations(years_all)
-        )
+        ))
 
     # Test only single MFC × resistance × year combinations
     else:
-        subsets = itertools.product(
+        subsets = list(itertools.product(
             mfc_types_all,
             resistances_all,
             years_all
-        )
+        ))
+
+    print('Testing Subsets:')
+    for s in list(subsets):
+        print(s)
+    print()
 
     # Find model solution for each subset
     for subset_mfc_types, subset_resistances, subset_years in subsets:
@@ -412,7 +403,7 @@ def compare_input_data_configurations(features,
             'subset_years': subset_years
         }
 
-        print('Subset:', subset)
+        # print('Subset:', subset)
 
         # Flag to determine whether results of this subset are saved
         contains_combination_with_zero_data = False
@@ -535,8 +526,10 @@ def compare_input_data_configurations(features,
 
     # Store which subsets were included/excluded and reason as excel sheet
     formatted_subsets = [format_subset_result(result) for result in subset_summary]
-    sheet_name = f"Subsets, Window={window_length}"
-    write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
+    # sheet_name = f"Subsets, Window={window_length}"
+    sheet_name = f"Subsets"
+    if sheet_name not in wb.sheetnames:
+        write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
 
     # Store the results for each model for this window size 
     for results, model in zip(model_results, models):
@@ -545,7 +538,8 @@ def compare_input_data_configurations(features,
         # r2s = []
 
         # Get model name
-        model_name = results[0]["model"]
+        # model_name = results[0]["model"]
+        model_name = model.__name__
 
         # Format results as list of dictionaries, showing best result for each subset tested
         formatted_results = [format_result(r, mfc_types_regex_mappings) for r in results]
@@ -553,16 +547,16 @@ def compare_input_data_configurations(features,
         # Create Excel worksheet with model name as the worksheet name
         write_dicts_to_sheet(
             wb,
-            sheet_name = f"{model_name} results, Window={window_length}",
+            sheet_name = f"{model_name}, Window={window_length}",
             rows=formatted_results
         )
 
         # Print results
-        for row in formatted_results:
-            print(f"Window length {window_length}")
-            for key, value in row.items():
-                print(f"{key}: {value}")
-            print()
+        # for row in formatted_results:
+        #     print(f"Window length {window_length}")
+        #     for key, value in row.items():
+        #         print(f"{key}: {value}")
+        #     print()
 
     # Save workbook to excel file
     wb.save("model_performance.xlsx")
@@ -570,21 +564,9 @@ def compare_input_data_configurations(features,
     return results
     
 
-
-    # if window_length is not None:
-    #     sheet_name = f"Subset Summary {window_length:.3g}h"
-    # else:
-    #     sheet_name = "Subset Summary"
-
-    
-
-    # # Extract the best configurations for each model
-    # best_configs = extract_best_configs(model_results, verbose=verbose)
-    # return best_configs
-
 if __name__ == '__main__':
 
-    print("comparing")
+    # print("comparing")
 
     results = compare_input_data_configurations(
         features=[
@@ -612,7 +594,7 @@ if __name__ == '__main__':
         target_data_points = 25,
         # target_data_points=5,
         model_params= [ridge_params, xgb_params],
-        # test_combinations=False,
+        test_combinations=False,
         # downsample=False
         scale_features=[True, False],
         verbose=False
