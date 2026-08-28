@@ -11,7 +11,7 @@ wb = Workbook()
 # Remove the default empty sheet
 wb.remove(wb.active)
 
-models = [Ridge]#, XGBRegressor]
+models = [Ridge, XGBRegressor]
 model_params = [ridge_params, xgb_params]
 scale_features=[True, False]
 
@@ -27,7 +27,7 @@ feature_set = [
 
 # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
 # Window lengths in hours
-window_lengths = [1/12, 1/6, 1/3]#, 1/2, 1, 2, 3, 4, 5, 6]
+window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5, 6]
 
 def select_best_results(results, performance_metric):
     # Find a set of configurations that are the best performing for any window size
@@ -75,19 +75,12 @@ def select_best_results(results, performance_metric):
 
     return results
 
-
-def plot_data(model, 
-              excel_file="model_performance.xlsx",
-              performance_metric="R²"):
-
-    model_name = model.__name__
-
-    excel_file = excel_file
+def sort_data_by_subset(excel_file, model_name, performance_metric):
 
     # Read all sheets
     all_sheets = pd.read_excel(excel_file, sheet_name=None)
 
-    # Store R2 values for each configuration
+    # Store time series results for each subset
     results = {}
 
     # print(all_sheets)
@@ -135,6 +128,72 @@ def plot_data(model,
             results[series_name]["window"].append(window_size)
             results[series_name]["result"].append(result)
 
+    return results
+
+
+
+def plot_data(model, 
+              excel_file="model_performance.xlsx",
+              performance_metric="R²",
+              show_best_results_only=True):
+
+    model_name = model.__name__
+
+    excel_file = excel_file
+
+    results = sort_data_by_subset(excel_file, model_name, performance_metric)
+
+    # # Read all sheets
+    # all_sheets = pd.read_excel(excel_file, sheet_name=None)
+
+    # # Store time series results for each subset
+    # results = {}
+
+    # # print(all_sheets)
+
+    # for sheet_name, df in all_sheets.items():
+
+    #     # Only use sheets belonging to this model
+    #     if not sheet_name.startswith(f"{model_name}"):
+    #         continue
+
+    #     # else:
+    #     #     print(sheet_name)
+
+    #     # Extract window size from sheet name
+    #     # e.g. "Ridge, Window=0.333"
+    #     window_size = float(
+    #         sheet_name.split("Window=")[1]
+    #     )
+
+    #     # Process each row
+    #     for _, row in df.iterrows():
+
+    #         mfc_type = row["MFC Types"]
+    #         resistance = row["Resistances (kOhm)"]
+    #         year = row["Years"]
+    #         # r2 = row["R²"]
+    #         result = row[performance_metric]
+
+    #         # Name of this data series
+    #         series_name = (
+    #             f"{mfc_type}, "
+    #             f"R={resistance}, "
+    #             f"{year}"
+    #         )
+
+    #         # Add new data series to overall results
+    #         if series_name not in results:
+    #             results[series_name] = {
+    #                 "window": [],
+    #                 # "r2": []
+    #                 "result": []
+    #             }
+
+    #         # Store result from this sheet to data series
+    #         results[series_name]["window"].append(window_size)
+    #         results[series_name]["result"].append(result)
+
     # # Find a set of configurations that are the best performing for any window size
     # top_configurations = set()
 
@@ -177,9 +236,9 @@ def plot_data(model,
     #     for series_name, values in results.items()
     #     if series_name in top_configurations
     # }
-
-    results = select_best_results(results, performance_metric)
-
+    if show_best_results_only:
+        results = select_best_results(results, performance_metric)
+    
     # Plot
     plt.figure(figsize=(15, 6))
 
@@ -289,7 +348,8 @@ def main():
         for metric in ["R²", "MAE"]:
             plot_data(model, 
                     excel_file="model_performance.xlsx",
-                    performance_metric=metric)
+                    performance_metric=metric,
+                    show_best_results_only=False)
 
 if __name__ == "__main__":
     main()

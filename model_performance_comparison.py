@@ -22,8 +22,6 @@ work_book = Workbook()
 # Remove the default empty sheet
 work_book.remove(work_book.active)
 
-
-
 mfc_types_regex_mappings = {
         r"10\*10\s*AC": "10x10_AC",
         r"20\*30\s*AC": "20x30_AC",
@@ -379,7 +377,8 @@ def compare_input_data_configurations(features,
         subsets = list(itertools.product(
             mfc_types_all,
             resistances_all,
-            [years_all]
+            # [years_all],
+            all_combinations(years_all)
         ))
 
     print('Testing Subsets:')
