@@ -11,7 +11,10 @@ wb = Workbook()
 # Remove the default empty sheet
 wb.remove(wb.active)
 
-models = [Ridge, XGBRegressor] 
+models = [Ridge]#, XGBRegressor]
+model_params = [ridge_params, xgb_params]
+scale_features=[True, False]
+
 
 feature_set = [
                     'Vpeak mV', 
@@ -24,7 +27,54 @@ feature_set = [
 
 # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
 # Window lengths in hours
-window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3]
+window_lengths = [1/12, 1/6, 1/3]#, 1/2, 1, 2, 3, 4, 5, 6]
+
+def select_best_results(results, performance_metric):
+    # Find a set of configurations that are the best performing for any window size
+    top_configurations = set()
+
+    # Get all widnow sizes tested
+    for window_size in set(
+        window
+        for values in results.values()
+        for window in values["window"]
+    ):
+
+        # Get R2 values for this window size
+        window_results = []
+
+        for series_name, values in results.items():
+
+            if window_size in values["window"]:
+                index = values["window"].index(window_size)
+                result = values["result"][index]
+
+                window_results.append((series_name, result))
+
+        # Sort by R2 and take the best config
+        reverse = True if performance_metric == "R²" else False
+
+        n_configs = 1
+        top_configs = sorted(
+            window_results,
+            key=lambda x: x[1],
+            reverse=reverse
+        )[:n_configs]
+
+        # Add these configurations to the set
+        top_configurations.update(
+            series_name for series_name, result in top_configs
+        )
+
+    # Filter results excluding those that are not in the set of top configurations
+    results = {
+        series_name: values
+        for series_name, values in results.items()
+        if series_name in top_configurations
+    }
+
+    return results
+
 
 def plot_data(model, 
               excel_file="model_performance.xlsx",
@@ -57,8 +107,6 @@ def plot_data(model,
             sheet_name.split("Window=")[1]
         )
 
-        # print(window_size)
-
         # Process each row
         for _, row in df.iterrows():
 
@@ -87,48 +135,50 @@ def plot_data(model,
             results[series_name]["window"].append(window_size)
             results[series_name]["result"].append(result)
 
-    # Find a set of configurations that are the best performing for any window size
-    top_configurations = set()
+    # # Find a set of configurations that are the best performing for any window size
+    # top_configurations = set()
 
-    # Get all widnow sizes tested
-    for window_size in set(
-        window
-        for values in results.values()
-        for window in values["window"]
-    ):
+    # # Get all widnow sizes tested
+    # for window_size in set(
+    #     window
+    #     for values in results.values()
+    #     for window in values["window"]
+    # ):
 
-        # Get R2 values for this window size
-        window_results = []
+    #     # Get R2 values for this window size
+    #     window_results = []
 
-        for series_name, values in results.items():
+    #     for series_name, values in results.items():
 
-            if window_size in values["window"]:
-                index = values["window"].index(window_size)
-                result = values["result"][index]
+    #         if window_size in values["window"]:
+    #             index = values["window"].index(window_size)
+    #             result = values["result"][index]
 
-                window_results.append((series_name, result))
+    #             window_results.append((series_name, result))
 
-        # Sort by R2 and take the best config
-        reverse = True if performance_metric == "R²" else False
+    #     # Sort by R2 and take the best config
+    #     reverse = True if performance_metric == "R²" else False
 
-        n_configs = 1
-        top_configs = sorted(
-            window_results,
-            key=lambda x: x[1],
-            reverse=True
-        )[:n_configs]
+    #     n_configs = 1
+    #     top_configs = sorted(
+    #         window_results,
+    #         key=lambda x: x[1],
+    #         reverse=reverse
+    #     )[:n_configs]
 
-        # Add these configurations to the set
-        top_configurations.update(
-            series_name for series_name, result in top_configs
-        )
+    #     # Add these configurations to the set
+    #     top_configurations.update(
+    #         series_name for series_name, result in top_configs
+    #     )
 
-    # Filter results excluding those that are not in the set of top configurations
-    results = {
-        series_name: values
-        for series_name, values in results.items()
-        if series_name in top_configurations
-    }
+    # # Filter results excluding those that are not in the set of top configurations
+    # results = {
+    #     series_name: values
+    #     for series_name, values in results.items()
+    #     if series_name in top_configurations
+    # }
+
+    results = select_best_results(results, performance_metric)
 
     # Plot
     plt.figure(figsize=(15, 6))
@@ -225,11 +275,11 @@ def main():
         # models = [Ridge, XGBRegressor],
         models=models,
         # target_data_points = 25,
-        target_data_points=5,
-        model_params= [ridge_params, xgb_params],
+        target_data_points=10,
+        model_params=model_params,
         test_combinations=False,
         downsample=False,
-        scale_features=[True, False],
+        scale_features=scale_features,
         verbose=False,
         window_length=window_length
     )

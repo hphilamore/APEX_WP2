@@ -146,7 +146,6 @@ def optimise_hyperparameters(X_train,
                                y_train, 
                                y_test, 
                                configuration, 
-                               results,
                                model_class, 
                                param_grid,
                                features,  
@@ -318,16 +317,16 @@ def format_result(result, mfc_types_regex_mappings):
 #     return best_configs
 
 
-def format_subset_result(result):
-    subset = result["subset"]
+def format_subset_info(info):
+    subset = info["subset"]
 
     return {
         "MFC Types": ", ".join(subset["subset_mfc_types"]),
         "Resistances (kOhm)": ", ".join(map(str, subset["subset_resistances"])),
         "Years": ", ".join(map(str, subset["subset_years"])),
-        "N Data Points": result["n_data_points"],
-        "Included": result["included"],
-        "Reason": result["reason"],
+        "N Data Points": info["n_data_points"],
+        "Included": info["included"],
+        "Reason": info["reason"],
     }
 
 
@@ -380,7 +379,7 @@ def compare_input_data_configurations(features,
         subsets = list(itertools.product(
             mfc_types_all,
             resistances_all,
-            years_all
+            [years_all]
         ))
 
     print('Testing Subsets:')
@@ -395,7 +394,7 @@ def compare_input_data_configurations(features,
         if not test_combinations:
             subset_mfc_types = [subset_mfc_types]
             subset_resistances = [subset_resistances]
-            subset_years = [subset_years]
+            # subset_years = [subset_years]
 
         subset = {
             'subset_mfc_types': subset_mfc_types,
@@ -490,7 +489,7 @@ def compare_input_data_configurations(features,
                         test_size=0.2
                     ) 
 
-            for model_class, params, scale, results in zip(models, 
+            for model_class, params, scale, results_for_this_model in zip(models, 
                                                            model_params, 
                                                            scale_features, 
                                                            model_results):
@@ -502,13 +501,12 @@ def compare_input_data_configurations(features,
                     scaler = None
 
                 # Tune hyperparameters and get model result
-                result = optimise_hyperparameters(
+                result_for_this_subset = optimise_hyperparameters(
                             X_train, 
                             X_test, 
                             y_train, 
                             y_test, 
                             subset, 
-                            results=results, 
                             model_class=model_class, 
                             param_grid=params,
                             features=features,
@@ -516,16 +514,16 @@ def compare_input_data_configurations(features,
                             verbose=verbose)    
 
                 # Store result for this input data subset and window length
-                results.append(result)
+                results_for_this_model.append(result_for_this_subset)
 
-                format_result(result, mfc_types_regex_mappings)
+                # format_result(result_for_this_subset, mfc_types_regex_mappings)
 
     # Trim widnow length values to compact floating point representations                       
     if window_length is not None:
         window_length = round(window_length, 3)
 
     # Store which subsets were included/excluded and reason as excel sheet
-    formatted_subsets = [format_subset_result(result) for result in subset_summary]
+    formatted_subsets = [format_subset_info(info) for info in subset_summary]
     # sheet_name = f"Subsets, Window={window_length}"
     sheet_name = f"Subsets"
     if sheet_name not in wb.sheetnames:
@@ -544,12 +542,18 @@ def compare_input_data_configurations(features,
         # Format results as list of dictionaries, showing best result for each subset tested
         formatted_results = [format_result(r, mfc_types_regex_mappings) for r in results]
 
-        # Create Excel worksheet with model name as the worksheet name
-        write_dicts_to_sheet(
-            wb,
-            sheet_name = f"{model_name}, Window={window_length}",
-            rows=formatted_results
-        )
+        if formatted_results:
+            # Create Excel worksheet with model name as the worksheet name
+            write_dicts_to_sheet(
+                wb,
+                sheet_name = f"{model_name}, Window={window_length}",
+                rows=formatted_results
+            )
+        else:
+            print(
+                f"No valid configurations for {model_name}, "
+                f"Window={window_length}"
+            )
 
         # Print results
         # for row in formatted_results:
@@ -591,15 +595,14 @@ if __name__ == '__main__':
         # years_all = [2024],#, 2025],
         # models = [Ridge, XGBRegressor],
         models=[Ridge],
-        target_data_points = 25,
-        # target_data_points=5,
+        # target_data_points = 25,
+        target_data_points=10,
         model_params= [ridge_params, xgb_params],
         test_combinations=False,
         # downsample=False
         scale_features=[True, False],
         verbose=False
     )
-
 
 
 
