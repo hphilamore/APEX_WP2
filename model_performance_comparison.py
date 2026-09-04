@@ -292,7 +292,7 @@ def compare_input_data_configurations(features,
                                 target_data_points = 25, # smallest acceptable number of data points 
                                 downsample=True, # if True caps number of data points at target size
                                 # test_combinations = True, # if False test only single MFC × resistance × year combinations
-                                   test_years = 'seperate', # 'combined', 'all_combos'
+                                   test_years = 'separate', # 'combined', 'all_combos'
                                    verbose=True,
                                    window_length=None):
     
@@ -414,6 +414,7 @@ def compare_input_data_configurations(features,
                         # Extend feature data for this subset with filtered data
                         subset_data[feature].extend(filtered_feature)
 
+
         # Remove rows containig NaNs from feature data for this subset 
         df_subset = pd.DataFrame(subset_data)
 
@@ -499,27 +500,21 @@ def compare_input_data_configurations(features,
                 # Store result for this input data subset and window length
                 results_for_this_model.append(result_for_this_subset)
 
-                # format_result(result_for_this_subset, mfc_types_regex_mappings)
-
-    # Trim widnow length values to compact floating point representations                       
-    if window_length is not None:
-        window_length = round(window_length, 3)
-
-    # Store which subsets were included/excluded and reason as excel sheet
+    # Store which subsets were included/excluded in the results and reason as excel sheet
     formatted_subsets = [format_subset_info(info) for info in subset_summary]
     # sheet_name = f"Subsets, Window={window_length}"
     sheet_name = f"Subsets"
     if sheet_name not in wb.sheetnames:
         write_dicts_to_sheet(wb, sheet_name, formatted_subsets)
 
+    # Trim widnow length values to compact floating point representations                       
+    if window_length is not None:
+        window_length = round(window_length, 3)
+
     # Store the results for each model for this window size 
     for results, model in zip(model_results, models):
 
-        # # Array to store  R2 values for each window size for plotting 
-        # r2s = []
-
         # Get model name
-        # model_name = results[0]["model"]
         model_name = model.__name__
 
         # Format results as list of dictionaries, showing best result for each subset tested
@@ -548,7 +543,7 @@ def compare_input_data_configurations(features,
     # Save workbook to excel file
     wb.save("model_performance.xlsx")
 
-    return results
+    # return results
     
 
 if __name__ == '__main__':

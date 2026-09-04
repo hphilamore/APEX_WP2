@@ -57,6 +57,8 @@ def extract_and_store_features(input_file_path="all_data.pkl",
         "Energy J": {},
         "Vwindow mV": {},
         "Pwindow W": {},
+        "Timewindow": {},       # timestamp for every voltage sample
+        "COD_event_window": {},       # 1 before/at peak, 0 after peak
     }
 
     # Dates to index mfc analysis dictionary with 
@@ -74,6 +76,9 @@ def extract_and_store_features(input_file_path="all_data.pkl",
         # Set negative voltage values to 0
         data["Voltage mV"] = data["Voltage mV"].clip(lower=0)
 
+        # Set nan voltage values to 0
+        data["Voltage mV"] = data["Voltage mV"].fillna(0)
+
         # Compute column showing MFC power output
         data['Power W'] = (data["Voltage mV"]/1000)**2 / (data["Resistance kOhms"]*1000)
 
@@ -90,18 +95,24 @@ def extract_and_store_features(input_file_path="all_data.pkl",
         mfc_features["COD date time index"][mfc] = cod_events_idx
 
         # Store COD values
-        mfc_features["COD"][mfc] = list(data.loc[cod_events_idx, "COD"])
+        COD_vals = list(data.loc[cod_events_idx, "COD"])
+        # mfc_features["COD"][mfc] = list(data.loc[cod_events_idx, "COD"])
+        mfc_features["COD"][mfc] = COD_vals
 
         # -------- Resistance --------
         # Store Resistance value assocaited with each COD event 
-        mfc_features["Resistance kOhms"][mfc] = list(data.loc[cod_events_idx, "Resistance kOhms"])
+        resistance_vals = list(data.loc[cod_events_idx, "Resistance kOhms"])
+        mfc_features["Resistance kOhms"][mfc] = resistance_vals
 
         # Arrays to store index of voltage peaks for each COD event
         voltage_peaks_idx = []
-
+        
         # Get window of data following each COD event
-        for i in range(len(cod_events_idx)):
+        # for i in range(len(cod_events_idx)):
+        for i, j in zip(range(len(cod_events_idx)), COD_vals):
             start = cod_events_idx[i]
+            print(mfc, "COD=", j)
+            print("start", start)
 
             # Set end of window
             if window_length_hours > 0:
@@ -125,7 +136,7 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 
             # Select window of data
             window = data.loc[mask]
-            # print('Window length', len(window))
+            print('Window length', len(window))
 
             # Get the window of voltage and power data
             V_window = window['Voltage mV']
@@ -143,15 +154,26 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             # If there is data in the window
             if V_window.notna().any():
 
-                
                 # -------- Max voltage value --------
                 peak_idx = V_window.idxmax()
                 V_peak = V_window.loc[peak_idx]
-                # print(V_peak)
+                print("peak", peak_idx)
+                print("peak voltage mV", V_peak)
                 
                 # -------- Power at the max voltage value (i.e. max power becuase R is constant) --------        
                 P_peak = P_window.loc[peak_idx]
 
+                # -------- COD event labels --------
+                # Get the integer index the peak in the window
+                peak_position = V_window.index.get_loc(peak_idx)
+
+                # Use this to create an array of 1s up to the peak and 0s after
+                COD_event_labels = np.zeros(len(V_window), dtype=np.float32)
+                COD_event_labels[:peak_position + 1] = 1
+
+                label_series = pd.Series(COD_event_labels,
+                                         index=V_window.index
+)
                 # -------- Final voltage value --------
                 V_final = V_window.iloc[-1]
                 # print(V_final)
@@ -195,6 +217,11 @@ def extract_and_store_features(input_file_path="all_data.pkl",
                 rise_time = np.nan
                 # decay_slope = np.nan
 
+            print(V_window.tolist()[:10])
+            print(COD_event_labels.tolist()[:10])
+            print(V_window.index.copy().tolist()[:10])
+            print()
+
             # Store features for this data window
             voltage_peaks_idx.append(peak_idx)
             mfc_features["Window length (hours)"][mfc].append(window_length_hours)
@@ -205,6 +232,8 @@ def extract_and_store_features(input_file_path="all_data.pkl",
             mfc_features["Vfinal mV"][mfc].append(V_final)
             mfc_features["Pfinal W"][mfc].append(P_final)
             mfc_features["Rise time (days)"][mfc].append(round(rise_time, 6))
+            mfc_features["Timewindow"][mfc].append(V_window.index.copy().tolist())
+            mfc_features["COD_event_window"][mfc].append(COD_event_labels.tolist())
             # mfc_features["Decay slope (V per s)"][mfc].append(round(decay_slope, 6))
 
             # -------- Energy generated per COD event ---------
@@ -222,6 +251,14 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 
             mfc_features["Energy J"][mfc].append(round(energy, 3))
 
+            # plt.figure()
+            # plt.plot(V_window.index, V_window, label="Voltage")
+            # plt.plot(V_window.index, COD_event_labels, label="COD label")
+            # plt.title(f"{mfc}, COD={j}")
+            # plt.xlabel("Time")
+            # plt.legend()
+            # plt.show()
+
         # -----------------------------------------------
         # -------- Plot voltage peaks ---------
         # -----------------------------------------------
@@ -235,13 +272,13 @@ def extract_and_store_features(input_file_path="all_data.pkl",
                   show_plot=False
                   )
         
-        # plot_data(data, 
-        #           ["Power W"], 
-        #           title=mfc, 
-        #           voltage_peaks=voltage_peaks_idx,
-        #           show_days=False,
-        #           show_plot=False
-        #           )
+        plot_data(data, 
+                  ["Power W"], 
+                  title=mfc, 
+                  voltage_peaks=voltage_peaks_idx,
+                  show_days=False,
+                  show_plot=False
+                  )
         
     # print('Window size max', window_size_max)
 
@@ -282,8 +319,10 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 
         for sheet in mfc_features:
 
-            # Skip time series data
-            if sheet in ["Vwindow mV", "Pwindow W"]:
+            # Skip saving time series features to excel
+            if isinstance(mfc_features[sheet][mfc][0], 
+                          (list, tuple, dict, set, np.ndarray, pd.Series, pd.DataFrame)):
+                # print(f"skipping {sheet}")
                 continue
 
             # Convert each feature to dataframe with all mfc columns
@@ -304,6 +343,6 @@ def extract_and_store_features(input_file_path="all_data.pkl",
 if __name__ == "__main__":
     extract_and_store_features(input_file_path="all_data.pkl",
                                output_file_name=feature_data_file_name,
-                               window_length_hours=1
+                            #    window_length_hours=1
                                )
 

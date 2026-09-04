@@ -234,7 +234,7 @@ def main():
         
         # Get results for each subset tested for this window size and engineered features
         # best_configs = compare_input_data_configurations(
-        results = compare_input_data_configurations(
+        compare_input_data_configurations(
         features=feature_set,
         labels=['COD'],
         mfc_types_all = [
