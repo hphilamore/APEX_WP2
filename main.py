@@ -11,18 +11,18 @@ wb = Workbook()
 # Remove the default empty sheet
 wb.remove(wb.active)
 
-models = [Ridge, XGBRegressor]
+models = [Ridge]#, XGBRegressor]
 model_params = [ridge_params, xgb_params]
 scale_features=[True, False]
 
 
 feature_set = [
                     'Vpeak mV', 
-                    'Ppeak W', 
-                    'Energy J', 
-                    'Resistance kOhms', 
-                    'Vfinal mV', 
-                    'Pfinal W'
+                    # 'Ppeak W', 
+                    # 'Energy J', 
+                    # 'Resistance kOhms', 
+                    # 'Vfinal mV', 
+                    # 'Pfinal W'
                     ]
 
 # window_lengths = [1/12, 1/6, 1/3, 1/2, 1, 2, 3, 4, 5]#, 12, 18]
@@ -106,6 +106,7 @@ def sort_data_by_subset(excel_file, model_name, performance_metric):
             mfc_type = row["MFC Types"]
             resistance = row["Resistances (kOhm)"]
             year = row["Years"]
+            n_samples = row["N Samples"]
             # r2 = row["R²"]
             result = row[performance_metric]
 
@@ -113,8 +114,11 @@ def sort_data_by_subset(excel_file, model_name, performance_metric):
             series_name = (
                 f"{mfc_type}, "
                 f"R={resistance}, "
-                f"{year}"
+                f"{year}, "
+                f"({n_samples}) "
             )
+
+            # print(series_name)
 
             # Add new data series to overall results
             if series_name not in results:
@@ -143,106 +147,17 @@ def plot_data(model,
 
     results = sort_data_by_subset(excel_file, model_name, performance_metric)
 
-    # # Read all sheets
-    # all_sheets = pd.read_excel(excel_file, sheet_name=None)
-
-    # # Store time series results for each subset
-    # results = {}
-
-    # # print(all_sheets)
-
-    # for sheet_name, df in all_sheets.items():
-
-    #     # Only use sheets belonging to this model
-    #     if not sheet_name.startswith(f"{model_name}"):
-    #         continue
-
-    #     # else:
-    #     #     print(sheet_name)
-
-    #     # Extract window size from sheet name
-    #     # e.g. "Ridge, Window=0.333"
-    #     window_size = float(
-    #         sheet_name.split("Window=")[1]
-    #     )
-
-    #     # Process each row
-    #     for _, row in df.iterrows():
-
-    #         mfc_type = row["MFC Types"]
-    #         resistance = row["Resistances (kOhm)"]
-    #         year = row["Years"]
-    #         # r2 = row["R²"]
-    #         result = row[performance_metric]
-
-    #         # Name of this data series
-    #         series_name = (
-    #             f"{mfc_type}, "
-    #             f"R={resistance}, "
-    #             f"{year}"
-    #         )
-
-    #         # Add new data series to overall results
-    #         if series_name not in results:
-    #             results[series_name] = {
-    #                 "window": [],
-    #                 # "r2": []
-    #                 "result": []
-    #             }
-
-    #         # Store result from this sheet to data series
-    #         results[series_name]["window"].append(window_size)
-    #         results[series_name]["result"].append(result)
-
-    # # Find a set of configurations that are the best performing for any window size
-    # top_configurations = set()
-
-    # # Get all widnow sizes tested
-    # for window_size in set(
-    #     window
-    #     for values in results.values()
-    #     for window in values["window"]
-    # ):
-
-    #     # Get R2 values for this window size
-    #     window_results = []
-
-    #     for series_name, values in results.items():
-
-    #         if window_size in values["window"]:
-    #             index = values["window"].index(window_size)
-    #             result = values["result"][index]
-
-    #             window_results.append((series_name, result))
-
-    #     # Sort by R2 and take the best config
-    #     reverse = True if performance_metric == "R²" else False
-
-    #     n_configs = 1
-    #     top_configs = sorted(
-    #         window_results,
-    #         key=lambda x: x[1],
-    #         reverse=reverse
-    #     )[:n_configs]
-
-    #     # Add these configurations to the set
-    #     top_configurations.update(
-    #         series_name for series_name, result in top_configs
-    #     )
-
-    # # Filter results excluding those that are not in the set of top configurations
-    # results = {
-    #     series_name: values
-    #     for series_name, values in results.items()
-    #     if series_name in top_configurations
-    # }
     if show_best_results_only:
         results = select_best_results(results, performance_metric)
     
     # Plot
     plt.figure(figsize=(15, 6))
 
-    colours = plt.cm.tab10(np.linspace(0, 1, len(results)))
+    # colours = plt.cm.tab10(np.linspace(0, 1, len(results)))
+    colours = np.vstack([
+    plt.cm.tab20(np.linspace(0, 1, 20)),
+    plt.cm.tab10(np.linspace(0, 1, 5))
+    ])
 
     for (series_name, values), colour in zip(results.items(), colours):
 
@@ -269,6 +184,8 @@ def plot_data(model,
     plt.xlabel("Window size (hours)")
     plt.ylabel(performance_metric)
     plot_title = f"{performance_metric} vs Window Size — {model_name}"
+    if show_best_results_only:
+        plot_title += " - best"
     plt.title(plot_title)
 
     plt.legend(
@@ -336,7 +253,8 @@ def main():
         # target_data_points = 25,
         target_data_points=10,
         model_params=model_params,
-        test_combinations=False,
+        # test_combinations=False,
+        test_years = 'all_combos',
         downsample=False,
         scale_features=scale_features,
         verbose=False,
@@ -353,3 +271,11 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    # for model in models:
+    #     for metric in ["R²", "MAE"]:
+    #         plot_data(model, 
+    #                 excel_file="model_performance.xlsx",
+    #                 performance_metric=metric,
+    #                 # show_best_results_only=False
+    #                 )

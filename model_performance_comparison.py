@@ -139,7 +139,8 @@ def downsample_to_target(subset_data,
     return subset_data
 
 
-def optimise_hyperparameters(X_train, 
+def optimise_hyperparameters(n_observations,
+                             X_train, 
                                X_test, 
                                y_train, 
                                y_test, 
@@ -189,7 +190,7 @@ def optimise_hyperparameters(X_train,
             # "coefficients": model.coef_.copy(),
             # "intercept": model.intercept_,
             "feature_scales": scaler if scaler==None else scaler.scale_.copy(),
-            "n_samples": len(y_train) + len(y_pred),
+            "n_samples": n_observations, # len(y_train) + len(y_pred),
             "unique_y_train": np.unique(y_train).astype(int).tolist(),
             "unique_y_test": np.unique(y_test).astype(int).tolist()
             }
@@ -264,57 +265,6 @@ def format_result(result, mfc_types_regex_mappings):
     }
 
 
-# def extract_best_configs(model_results, verbose=True):
-
-#     best_configs = []
-
-#     # for results in [results_ridge, results_xgboost]:
-#     for results in model_results:
-
-#         # print('Results', results)
-
-#         # Sort results by R² descending
-#         results_sorted = sorted(results, key=lambda x: x["r2"], reverse=True)
-
-#         # Store the result that gives the highest R2 value
-#         best_configs.append(results_sorted[0])
-
-#         # print('Num results', len(results_sorted))
-
-#         # Show top 3 configurations 
-#         top_3 = results_sorted[:3]
-#         if verbose == True:
-
-#             print("\nTop 3 configurations:\n")
-#             for i, res in enumerate(top_3, 1):
-
-#                 print(f"--- Rank {i} ---")
-#                 print()
-#                 print("Model:", res["model"])
-#                 print("MFC types:", [mfc_types_regex_mappings[p] for p in res["mfc_types"]])
-#                 # print("MFC types:", res["mfc_types"])
-#                 print("Resistances kOhm:", res["resistances"])
-#                 print("Years:", res["years"])
-#                 print("R²:", round(res["r2"], 3))
-#                 print("MSE:", round(res["mse"], 3))
-#                 print("MAE:", round(res["mae"], 3))
-#                 # print("Alpha:", res["alpha"]),
-#                 print("Model Parameters:", ", ".join(f"{k}: {v:.3f}" for k, v in res["parameters"].items())),
-#                 print("N Samples:", res["n_samples"])
-#                 # print("Terms:", "v_peak, p_peak, energy, resistance")
-#                 print("Terms:", res["features"])
-#                 if "coefficients" in res:
-#                     print("Coefficients:", res["coefficients"])
-#                 if "intercept" in res:
-#                     print("Intercept:", res["intercept"])
-#                 if "feature_importances" in res:
-#                     print("Feature Importances:", res["feature_importances"])
-#                 # print("Coefficients:", [float(round(r, 3)) for r in res["coefficients"]])
-#                 # print("Intercept:", res["intercept"])
-#                 print()
-#     return best_configs
-
-
 def format_subset_info(info):
     subset = info["subset"]
 
@@ -341,7 +291,8 @@ def compare_input_data_configurations(features,
                                 #    min_data_points=25,
                                 target_data_points = 25, # smallest acceptable number of data points 
                                 downsample=True, # if True caps number of data points at target size
-                                test_combinations = True, # if False test only single MFC × resistance × year combinations
+                                # test_combinations = True, # if False test only single MFC × resistance × year combinations
+                                   test_years = 'seperate', # 'combined', 'all_combos'
                                    verbose=True,
                                    window_length=None):
     
@@ -364,22 +315,45 @@ def compare_input_data_configurations(features,
     first_feature = next(iter(mfc_features))
     mfc_names = mfc_features[first_feature].keys()
 
-    # Test every possible combination of MFCs/resistances/years
-    if test_combinations:
+    if test_years == 'separate':
         subsets = list(itertools.product(
-            all_combinations(mfc_types_all),
-            all_combinations(resistances_all),
-            all_combinations(years_all)
-        ))
+                    mfc_types_all,
+                    resistances_all,
+                    years_all
+                ))
 
-    # Test only single MFC × resistance × year combinations
-    else:
+    elif test_years == 'combined':
         subsets = list(itertools.product(
-            mfc_types_all,
-            resistances_all,
-            # [years_all],
-            all_combinations(years_all)
-        ))
+                            mfc_types_all,
+                            resistances_all,
+                            [years_all]
+                        ))
+
+    elif test_years == 'all_combos':
+        subsets = list(itertools.product(
+                            mfc_types_all,
+                            resistances_all,
+                            all_combinations(years_all)
+                        ))
+
+    else:
+        print('WARNING: Invalid entry for argument test_years')
+
+    # # Test every possible combination of MFCs/resistances/years
+    # if test_combinations:
+    #     subsets = list(itertools.product(
+    #         all_combinations(mfc_types_all),
+    #         all_combinations(resistances_all),
+    #         all_combinations(years_all)
+    #     ))
+
+    # # Test only single MFC × resistance × year combinations
+    # else:
+    #     subsets = list(itertools.product(
+    #         mfc_types_all,
+    #         resistances_all,
+    #         years_all
+    #     ))
 
     print('Testing Subsets:')
     for s in list(subsets):
@@ -390,10 +364,19 @@ def compare_input_data_configurations(features,
     for subset_mfc_types, subset_resistances, subset_years in subsets:
 
         # If using single MFC × resistance × year combinations, convert them to lists
-        if not test_combinations:
-            subset_mfc_types = [subset_mfc_types]
-            subset_resistances = [subset_resistances]
-            # subset_years = [subset_years]
+
+        # if not test_combinations:
+        #     subset_mfc_types = [subset_mfc_types]
+        #     subset_resistances = [subset_resistances]
+        #     # subset_years = [subset_years]
+
+        # Convert single MFC × resistance combinations to lists
+        subset_mfc_types = [subset_mfc_types]
+        subset_resistances = [subset_resistances]
+
+        # If using single year combinations, convert them to lists
+        if test_years == 'separate':
+            subset_years = [subset_years]       
 
         subset = {
             'subset_mfc_types': subset_mfc_types,
@@ -501,6 +484,7 @@ def compare_input_data_configurations(features,
 
                 # Tune hyperparameters and get model result
                 result_for_this_subset = optimise_hyperparameters(
+                            n_observations,
                             X_train, 
                             X_test, 
                             y_train, 
@@ -597,7 +581,8 @@ if __name__ == '__main__':
         # target_data_points = 25,
         target_data_points=10,
         model_params= [ridge_params, xgb_params],
-        test_combinations=False,
+        # test_combinations=False,
+        test_years = 'separate', # 'combined', 'seperate+combined'
         # downsample=False
         scale_features=[True, False],
         verbose=False
